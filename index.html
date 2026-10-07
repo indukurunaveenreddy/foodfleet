@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoodFleet — Online Food Ordering & Delivery</title>
+  <meta name="description" content="FoodFleet: Order delicious food from the best restaurants near you. Fast delivery, easy ordering, and real-time tracking.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍕</text></svg>">
+</head>
+<body>
+
+  <!-- ============================================================
+       HEADER
+       ============================================================ -->
+  <header class="main-header" id="main-header">
+    <div class="header-inner">
+      <a href="#" class="logo" id="logo-home">
+        <div class="logo-icon">🍽</div>
+        <span>FoodFleet</span>
+      </a>
+
+      <nav class="main-nav" id="desktop-nav">
+        <a href="#" data-page="home" class="active">Home</a>
+        <a href="#" data-page="restaurants">Restaurants</a>
+        <a href="#" data-page="menu">Menu</a>
+        <a href="#" data-page="tracking">Track Order</a>
+        <a href="#" data-page="admin">Admin</a>
+      </nav>
+
+      <div class="header-actions">
+        <!-- Logged-out state -->
+        <div id="auth-buttons">
+          <button class="auth-btn" id="btn-login" onclick="openAuthDialog('login')">Log In</button>
+          <button class="auth-btn filled" id="btn-signup" onclick="openAuthDialog('signup')">Sign Up</button>
+        </div>
+
+        <!-- Logged-in state (hidden by default) -->
+        <div id="user-area" style="display:none">
+          <div class="user-badge" id="user-badge">
+            <div class="user-avatar" id="user-avatar">U</div>
+            <span id="user-display-name">User</span>
+          </div>
+        </div>
+
+        <button class="cart-btn" id="open-cart" onclick="toggleCart()">
+          🛒 Cart
+          <span class="cart-badge" id="cart-badge" style="display:none">0</span>
+        </button>
+
+        <div class="hamburger" id="hamburger" onclick="toggleMobileNav()">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile nav -->
+  <div class="mobile-nav" id="mobile-nav">
+    <a href="#" data-page="home" onclick="toggleMobileNav()">Home</a>
+    <a href="#" data-page="restaurants" onclick="toggleMobileNav()">Restaurants</a>
+    <a href="#" data-page="menu" onclick="toggleMobileNav()">Menu</a>
+    <a href="#" data-page="tracking" onclick="toggleMobileNav()">Track Order</a>
+    <a href="#" data-page="admin" onclick="toggleMobileNav()">Admin</a>
+  </div>
+
+  <!-- ============================================================
+       AUTH DIALOG
+       ============================================================ -->
+  <dialog id="auth-dialog">
+    <div class="dialog-header">
+      <h2 id="auth-dialog-title">Welcome Back</h2>
+      <button class="dialog-close" onclick="closeAuthDialog()">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="auth-tabs">
+        <div class="auth-tab active" data-tab="login" onclick="switchAuthTab('login')">Log In</div>
+        <div class="auth-tab" data-tab="signup" onclick="switchAuthTab('signup')">Sign Up</div>
+      </div>
+
+      <!-- Login form -->
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="login-email">Email Address</label>
+          <input type="email" id="login-email" class="form-control" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" class="form-control" placeholder="Enter your password" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Log In</button>
+        <p class="form-footer">Don't have an account? <a href="#" onclick="switchAuthTab('signup')">Sign up</a></p>
+      </form>
+
+      <!-- Signup form -->
+      <form id="signup-form" style="display:none" onsubmit="handleSignup(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="signup-fname">First Name</label>
+            <input type="text" id="signup-fname" class="form-control" placeholder="John" required>
+          </div>
+          <div class="form-group">
+            <label for="signup-lname">Last Name</label>
+            <input type="text" id="signup-lname" class="form-control" placeholder="Doe" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="signup-email">Email Address</label>
+          <input type="email" id="signup-email" class="form-control" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-phone">Phone Number</label>
+          <input type="tel" id="signup-phone" class="form-control" placeholder="+1 (555) 000-0000" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" class="form-control" placeholder="Min 6 characters" required minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="signup-address">Delivery Address</label>
+          <input type="text" id="signup-address" class="form-control" placeholder="123 Main St, City" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+        <p class="form-footer">Already have an account? <a href="#" onclick="switchAuthTab('login')">Log in</a></p>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- ============================================================
+       CART SIDEBAR
+       ============================================================ -->
+  <div class="cart-overlay" id="cart-overlay">
+    <div class="cart-backdrop" onclick="toggleCart()"></div>
+    <div class="cart-panel">
+      <div class="cart-header">
+        <h2>🛒 Your Cart <span class="cart-count" id="cart-count-label">0</span></h2>
+        <button class="dialog-close" onclick="toggleCart()">✕</button>
+      </div>
+      <div class="cart-items" id="cart-items-container">
+        <div class="cart-empty" id="cart-empty">
+          <div class="empty-icon">🛒</div>
+          <p>Your cart is empty</p>
+          <p style="font-size:.85rem;margin-top:8px;color:var(--clr-text-dim)">Browse our menu and add delicious items!</p>
+        </div>
+      </div>
+      <div class="cart-footer" id="cart-footer" style="display:none">
+        <div class="cart-summary">
+          <div class="cart-summary-row"><span>Subtotal</span><span id="cart-subtotal">₹0.00</span></div>
+          <div class="cart-summary-row"><span>Delivery Fee</span><span>₹49.00</span></div>
+          <div class="cart-summary-row"><span>GST (5%)</span><span id="cart-tax">₹0.00</span></div>
+          <div class="cart-summary-row total"><span>Total</span><span class="amount" id="cart-total">₹0.00</span></div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="proceedToCheckout()">Proceed to Checkout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TOAST CONTAINER
+       ============================================================ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ============================================================
+       PAGE: HOME
+       ============================================================ -->
+  <main id="page-home" class="page active">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-inner">
+          <div class="hero-content">
+            <div class="hero-badge">
+              <span class="pulse"></span>
+              Now delivering in your area
+            </div>
+            <h1>Delicious Food, <span class="text-gradient">Delivered Fast</span></h1>
+            <p>Order from the best local restaurants with easy online ordering, real-time tracking, and fast delivery right to your doorstep.</p>
+            <div class="hero-cta">
+              <button class="btn btn-primary" onclick="navigateTo('restaurants')">
+                🍽 Order Now
+              </button>
+              <button class="btn btn-secondary" onclick="navigateTo('tracking')">
+                📍 Track Order
+              </button>
+            </div>
+            <div class="hero-stats">
+              <div class="stat">
+                <div class="stat-number">500+</div>
+                <div class="stat-label">Restaurants</div>
+              </div>
+              <div class="stat">
+                <div class="stat-number">10K+</div>
+                <div class="stat-label">Happy Customers</div>
+              </div>
+              <div class="stat">
+                <div class="stat-number">30 min</div>
+                <div class="stat-label">Avg. Delivery</div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-image">
+            <img src="images/hero-burger.jpg" alt="Delicious gourmet burger" width="600" height="375">
+            <div class="float-card delivery">
+              <div class="float-card-icon green">🚴</div>
+              <div>
+                <div style="font-weight:600">Fast Delivery</div>
+                <div style="font-size:.78rem;color:var(--clr-text-muted)">25-30 min</div>
+              </div>
+            </div>
+            <div class="float-card rating">
+              <div class="float-card-icon yellow">⭐</div>
+              <div>
+                <div style="font-weight:600">4.9 Rating</div>
+                <div style="font-size:.78rem;color:var(--clr-text-muted)">2K+ reviews</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="reveal" id="how-it-works">
+      <div class="container">
+        <div class="section-header">
+          <div class="label">How It Works</div>
+          <h2>Order in <span class="text-gradient">4 Simple Steps</span></h2>
+          <p>From browsing to delivery, we make the entire food ordering process seamless and delightful.</p>
+        </div>
+        <div class="steps-grid">
+          <div class="step-card">
+            <div class="step-number">1</div>
+            <h3>Browse</h3>
+            <p>Explore restaurants and menus near you with detailed ratings and reviews.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">2</div>
+            <h3>Order</h3>
+            <p>Add your favorite dishes to the cart and customize to your preference.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">3</div>
+            <h3>Pay</h3>
+            <p>Securely pay with your preferred method — cards, wallets, or cash.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">4</div>
+            <h3>Enjoy</h3>
+            <p>Track your order in real-time and enjoy your meal at your doorstep.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Categories -->
+    <section class="reveal" style="background:var(--clr-bg-alt)">
+      <div class="container">
+        <div class="section-header">
+          <div class="label">Categories</div>
+          <h2>Explore by <span class="text-gradient">Cuisine</span></h2>
+          <p>Satisfy every craving — from classic American to exotic Asian flavors.</p>
+        </div>
+        <div class="categories-scroll" id="categories-scroll">
+          <div class="category-card active" data-category="all" onclick="filterCategory('all',this)">
+            <span class="category-icon">🍽</span>
+            <h4>All</h4>
+            <p>Everything</p>
+          </div>
+          <div class="category-card" data-category="dhaba" onclick="filterCategory('dhaba',this)" style="background:linear-gradient(135deg, rgba(245,158,11,0.18), rgba(239,68,68,0.18));border:1.5px solid rgba(245,158,11,0.45)">
+            <span class="category-icon">👑</span>
+            <h4 style="color:#f59e0b">Indukuru's Dhaba</h4>
+            <p>Family Specials</p>
+          </div>
+          <div class="category-card" data-category="burger" onclick="filterCategory('burger',this)">
+            <span class="category-icon">🍔</span>
+            <h4>Burgers</h4>
+            <p>Juicy & Stacked</p>
+          </div>
+          <div class="category-card" data-category="pizza" onclick="filterCategory('pizza',this)">
+            <span class="category-icon">🍕</span>
+            <h4>Pizza</h4>
+            <p>Cheesy Goodness</p>
+          </div>
+          <div class="category-card" data-category="biryani" onclick="filterCategory('biryani',this)">
+            <span class="category-icon">🍛</span>
+            <h4>Biryani</h4>
+            <p>Royal Dum</p>
+          </div>
+          <div class="category-card" data-category="chinese" onclick="filterCategory('chinese',this)">
+            <span class="category-icon">🥡</span>
+            <h4>Chinese</h4>
+            <p>Wok Tossed</p>
+          </div>
+          <div class="category-card" data-category="sushi" onclick="filterCategory('sushi',this)">
+            <span class="category-icon">🍣</span>
+            <h4>Sushi</h4>
+            <p>Fresh & Elegant</p>
+          </div>
+          <div class="category-card" data-category="pasta" onclick="filterCategory('pasta',this)">
+            <span class="category-icon">🍝</span>
+            <h4>Pasta</h4>
+            <p>Italian Classic</p>
+          </div>
+          <div class="category-card" data-category="tacos" onclick="filterCategory('tacos',this)">
+            <span class="category-icon">🌮</span>
+            <h4>Tacos</h4>
+            <p>Mexican Fiesta</p>
+          </div>
+          <div class="category-card" data-category="salad" onclick="filterCategory('salad',this)">
+            <span class="category-icon">🥗</span>
+            <h4>Salads</h4>
+            <p>Fresh & Healthy</p>
+          </div>
+          <div class="category-card" data-category="icecream" onclick="filterCategory('icecream',this)">
+            <span class="category-icon">🍦</span>
+            <h4>Ice Cream</h4>
+            <p>Cool Treats</p>
+          </div>
+          <div class="category-card" data-category="drinks" onclick="filterCategory('drinks',this)">
+            <span class="category-icon">🥤</span>
+            <h4>Drinks</h4>
+            <p>Refreshing</p>
+          </div>
+          <div class="category-card" data-category="dessert" onclick="filterCategory('dessert',this)">
+            <span class="category-icon">🍰</span>
+            <h4>Desserts</h4>
+            <p>Sweet Treats</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Featured Restaurants preview -->
+    <section class="reveal">
+      <div class="container">
+        <div class="section-header">
+          <div class="label">Top Picks</div>
+          <h2>Featured <span class="text-gradient">Restaurants</span></h2>
+          <p>Discover the highest-rated restaurants handpicked for you.</p>
+        </div>
+        <div class="restaurant-grid" id="featured-restaurants"></div>
+        <div style="text-align:center;margin-top:40px">
+          <button class="btn btn-secondary" onclick="navigateTo('restaurants')">View All Restaurants →</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================================================
+       PAGE: RESTAURANTS
+       ============================================================ -->
+  <div id="page-restaurants" class="page">
+    <section style="padding-top:calc(var(--header-h) + 40px)">
+      <div class="container">
+        <div class="section-header" style="margin-bottom:30px">
+          <div class="label">Restaurants</div>
+          <h2>All <span class="text-gradient">Restaurants</span></h2>
+          <p>Browse our curated selection of top-rated restaurants in your area.</p>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:30px;flex-wrap:wrap">
+          <input type="text" id="restaurant-search" class="form-control" placeholder="🔍 Search restaurants..." style="max-width:400px;border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-full);padding:12px 20px" oninput="searchRestaurants(this.value)">
+        </div>
+        <div class="restaurant-grid" id="all-restaurants"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       PAGE: MENU
+       ============================================================ -->
+  <div id="page-menu" class="page">
+    <section style="padding-top:calc(var(--header-h) + 40px)">
+      <div class="container">
+        <div class="section-header" style="margin-bottom:30px">
+          <div class="label">Menu</div>
+          <h2>Our <span class="text-gradient">Delicious Menu</span></h2>
+          <p>Handcrafted dishes made with the freshest ingredients.</p>
+        </div>
+        <div class="categories-scroll" style="margin-bottom:30px" id="menu-categories">
+          <div class="category-card active" data-category="all" onclick="filterMenu('all',this)">
+            <span class="category-icon">🍽</span>
+            <h4>All</h4>
+          </div>
+          <div class="category-card" data-category="dhaba" onclick="filterMenu('dhaba',this)" style="background:linear-gradient(135deg, rgba(245,158,11,0.18), rgba(239,68,68,0.18));border:1.5px solid rgba(245,158,11,0.45)">
+            <span class="category-icon">👑</span>
+            <h4 style="color:#f59e0b">Indukuru's Dhaba</h4>
+          </div>
+          <div class="category-card" data-category="burger" onclick="filterMenu('burger',this)">
+            <span class="category-icon">🍔</span>
+            <h4>Burgers</h4>
+          </div>
+          <div class="category-card" data-category="pizza" onclick="filterMenu('pizza',this)">
+            <span class="category-icon">🍕</span>
+            <h4>Pizza</h4>
+          </div>
+          <div class="category-card" data-category="biryani" onclick="filterMenu('biryani',this)">
+            <span class="category-icon">🍛</span>
+            <h4>Biryani</h4>
+          </div>
+          <div class="category-card" data-category="chinese" onclick="filterMenu('chinese',this)">
+            <span class="category-icon">🥡</span>
+            <h4>Chinese</h4>
+          </div>
+          <div class="category-card" data-category="sushi" onclick="filterMenu('sushi',this)">
+            <span class="category-icon">🍣</span>
+            <h4>Sushi</h4>
+          </div>
+          <div class="category-card" data-category="pasta" onclick="filterMenu('pasta',this)">
+            <span class="category-icon">🍝</span>
+            <h4>Pasta</h4>
+          </div>
+          <div class="category-card" data-category="tacos" onclick="filterMenu('tacos',this)">
+            <span class="category-icon">🌮</span>
+            <h4>Tacos</h4>
+          </div>
+          <div class="category-card" data-category="salad" onclick="filterMenu('salad',this)">
+            <span class="category-icon">🥗</span>
+            <h4>Salads</h4>
+          </div>
+          <div class="category-card" data-category="icecream" onclick="filterMenu('icecream',this)">
+            <span class="category-icon">🍦</span>
+            <h4>Ice Cream</h4>
+          </div>
+          <div class="category-card" data-category="drinks" onclick="filterMenu('drinks',this)">
+            <span class="category-icon">🥤</span>
+            <h4>Drinks</h4>
+          </div>
+          <div class="category-card" data-category="dessert" onclick="filterMenu('dessert',this)">
+            <span class="category-icon">🍰</span>
+            <h4>Desserts</h4>
+          </div>
+        </div>
+        <div class="menu-grid" id="menu-items-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       PAGE: ORDER TRACKING
+       ============================================================ -->
+  <div id="page-tracking" class="page">
+    <section class="tracking-section" style="padding-top:calc(var(--header-h) + 40px);min-height:100vh">
+      <div class="container">
+        <div class="section-header">
+          <div class="label">Track Order</div>
+          <h2>Real-Time <span class="text-gradient">Order Tracking</span></h2>
+          <p>Enter your order ID to see the live status of your delivery.</p>
+        </div>
+        <div class="tracking-card">
+          <div class="order-search">
+            <input type="text" id="track-order-id" placeholder="Enter Order ID (e.g. ORD-001)" value="ORD-001">
+            <button onclick="trackOrder()">Track</button>
+          </div>
+          <div id="tracking-result"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       PAGE: ADMIN PANEL
+       ============================================================ -->
+  <div id="page-admin" class="page">
+    <section class="admin-section" style="padding-top:calc(var(--header-h) + 40px);min-height:100vh">
+      <div class="container">
+        <div class="section-header">
+          <div class="label">Admin Dashboard</div>
+          <h2>Restaurant <span class="text-gradient">Management</span></h2>
+          <p>Manage menus, orders, and delivery operations in real-time.</p>
+        </div>
+
+        <!-- Admin Stats -->
+        <div class="admin-grid" id="admin-stats">
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon orange">📦</div>
+            <h3 id="admin-total-orders">0</h3>
+            <p>Total Orders</p>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon green">💰</div>
+            <h3 id="admin-revenue">$0</h3>
+            <p>Total Revenue</p>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon blue">🍽</div>
+            <h3 id="admin-menu-items">0</h3>
+            <p>Menu Items</p>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-icon purple">👥</div>
+            <h3 id="admin-customers">0</h3>
+            <p>Customers</p>
+          </div>
+        </div>
+
+        <!-- Add Menu Item -->
+        <div class="admin-table-wrap" style="margin-bottom:30px">
+          <div class="admin-table-header">
+            <h3>➕ Add New Menu Item</h3>
+          </div>
+          <div style="padding:24px">
+            <form id="add-menu-form" onsubmit="addMenuItem(event)">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="new-item-name">Item Name</label>
+                  <input type="text" id="new-item-name" class="form-control" placeholder="e.g. Truffle Burger" required>
+                </div>
+                <div class="form-group">
+                  <label for="new-item-price">Price (₹)</label>
+                  <input type="number" id="new-item-price" class="form-control" placeholder="249" step="1" min="0" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="new-item-category">Category</label>
+                  <select id="new-item-category" class="form-control" style="border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md);background:var(--clr-bg-alt)" required>
+                    <option value="">Select category</option>
+                    <option value="burger">Burger</option>
+                    <option value="pizza">Pizza</option>
+                    <option value="biryani">Biryani / Indian</option>
+                    <option value="chinese">Chinese</option>
+                    <option value="sushi">Sushi</option>
+                    <option value="pasta">Pasta</option>
+                    <option value="tacos">Tacos</option>
+                    <option value="salad">Salad</option>
+                    <option value="icecream">Ice Cream</option>
+                    <option value="drinks">Soft Drinks</option>
+                    <option value="dessert">Dessert</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="new-item-restaurant">Restaurant</label>
+                  <input type="text" id="new-item-restaurant" class="form-control" placeholder="Restaurant name" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="new-item-desc">Description</label>
+                <input type="text" id="new-item-desc" class="form-control" placeholder="Short description of the dish" required>
+              </div>
+              <button type="submit" class="btn btn-primary" style="margin-top:8px">Add Item</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Orders table -->
+        <div class="admin-table-wrap" style="margin-bottom:30px">
+          <div class="admin-table-header">
+            <h3>📋 Recent Orders</h3>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-orders-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Menu items table -->
+        <div class="admin-table-wrap">
+          <div class="admin-table-header">
+            <h3>🍽 Menu Items</h3>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Restaurant</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-menu-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       PAGE: PAYMENT / CHECKOUT
+       ============================================================ -->
+  <div id="page-payment" class="page">
+    <section style="padding-top:calc(var(--header-h) + 40px);min-height:100vh">
+      <div class="container">
+        <div class="section-header">
+          <div class="label">Checkout</div>
+          <h2>Complete Your <span class="text-gradient">Order</span></h2>
+        </div>
+        <div class="payment-grid">
+          <div class="payment-form-card">
+            <h3 style="margin-bottom:24px">Delivery Details</h3>
+            <form id="checkout-form" onsubmit="processPayment(event)">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="checkout-name">Full Name</label>
+                  <input type="text" id="checkout-name" class="form-control" placeholder="Rahul Sharma" required>
+                </div>
+                <div class="form-group">
+                  <label for="checkout-phone">Phone</label>
+                  <input type="tel" id="checkout-phone" class="form-control" placeholder="+91 98765 43210" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="checkout-address">Delivery Address</label>
+                <input type="text" id="checkout-address" class="form-control" placeholder="123 MG Road, Hyderabad, Telangana" required>
+              </div>
+              <div class="form-group">
+                <label for="checkout-notes">Delivery Notes (Optional)</label>
+                <input type="text" id="checkout-notes" class="form-control" placeholder="Ring doorbell, leave at door, etc.">
+              </div>
+
+              <h3 style="margin:28px 0 16px">Payment Method</h3>
+              <div class="payment-methods">
+                <div class="payment-method active" onclick="selectPayment(this,'upi')">
+                  <span class="icon">📱</span>
+                  UPI
+                </div>
+                <div class="payment-method" onclick="selectPayment(this,'card')">
+                  <span class="icon">💳</span>
+                  Card
+                </div>
+                <div class="payment-method" onclick="selectPayment(this,'netbanking')">
+                  <span class="icon">🏦</span>
+                  Net Banking
+                </div>
+                <div class="payment-method" onclick="selectPayment(this,'cash')">
+                  <span class="icon">💵</span>
+                  Cash on Delivery
+                </div>
+              </div>
+
+              <!-- UPI Details -->
+              <div id="upi-details">
+                <div style="text-align:center;margin-bottom:20px">
+                  <p style="font-size:.92rem;color:var(--clr-text-muted);margin-bottom:12px">Scan the QR code to pay via PhonePe / Google Pay / Paytm</p>
+                  <div style="background:#fff;border-radius:var(--radius-lg);padding:16px;display:inline-block;box-shadow:0 4px 20px rgba(0,0,0,.3)">
+                    <img src="images/phonepe-qr.jpg" alt="PhonePe QR Code — INDUKURU MANVITHA" style="width:220px;height:auto;border-radius:8px">
+                  </div>
+                  <p style="margin-top:12px;font-weight:600;color:var(--clr-text);font-size:.95rem">INDUKURU MANVITHA</p>
+                  <p style="font-size:.82rem;color:var(--clr-text-muted)">PhonePe · UPI Payments Accepted</p>
+                  <div style="margin-top:10px;padding:10px 20px;background:var(--clr-bg-alt);border:1px dashed var(--clr-primary);border-radius:var(--radius-md);display:inline-block">
+                    <p style="font-size:.75rem;color:var(--clr-text-muted);margin-bottom:2px">Or pay directly to UPI ID:</p>
+                    <p style="font-weight:700;font-family:monospace;font-size:1rem;color:var(--clr-primary);letter-spacing:.5px">8639866865@ybl</p>
+                  </div>
+                </div>
+                <div style="border-top:1px solid var(--clr-surface-border);padding-top:16px">
+                  <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:8px">Or enter your UPI ID manually:</p>
+                  <div class="form-group">
+                    <label for="upi-id">UPI ID</label>
+                    <input type="text" id="upi-id" class="form-control" placeholder="yourname@ybl / yourname@paytm">
+                  </div>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@ybl'">📲 PhonePe</span>
+                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@okaxis'">💰 Google Pay</span>
+                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@paytm'">🅿️ Paytm</span>
+                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@upi'">🏛 BHIM</span>
+                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@apl'">📦 Amazon Pay</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Details -->
+              <div id="card-details" style="display:none">
+                <div class="form-group">
+                  <label for="card-number">Card Number</label>
+                  <input type="text" id="card-number" class="form-control" placeholder="4242 4242 4242 4242" maxlength="19">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="card-expiry">Expiry</label>
+                    <input type="text" id="card-expiry" class="form-control" placeholder="MM/YY" maxlength="5">
+                  </div>
+                  <div class="form-group">
+                    <label for="card-cvv">CVV</label>
+                    <input type="text" id="card-cvv" class="form-control" placeholder="123" maxlength="3">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Net Banking Details -->
+              <div id="netbanking-details" style="display:none">
+                <div class="form-group">
+                  <label for="bank-select">Select Your Bank</label>
+                  <select id="bank-select" class="form-control" style="border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md);background:var(--clr-bg-alt)">
+                    <option value="">Choose a bank</option>
+                    <option value="sbi">State Bank of India (SBI)</option>
+                    <option value="hdfc">HDFC Bank</option>
+                    <option value="icici">ICICI Bank</option>
+                    <option value="axis">Axis Bank</option>
+                    <option value="union">Union Bank of India</option>
+                    <option value="kotak">Kotak Mahindra Bank</option>
+                    <option value="bob">Bank of Baroda</option>
+                    <option value="pnb">Punjab National Bank</option>
+                    <option value="canara">Canara Bank</option>
+                    <option value="idbi">IDBI Bank</option>
+                    <option value="yes">Yes Bank</option>
+                  </select>
+                </div>
+                <div style="margin-top:16px;padding:16px;border-radius:var(--radius-md);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border)">
+                  <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:8px">💳 Beneficiary Account Details:</p>
+                  <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.88rem">
+                    <span style="color:var(--clr-text-muted)">Account Name:</span>
+                    <span style="font-weight:600">INDUKURU MANVITHA</span>
+                    <span style="color:var(--clr-text-muted)">Account No:</span>
+                    <span style="font-weight:600;font-family:monospace;letter-spacing:1px">057012010001748</span>
+                    <span style="color:var(--clr-text-muted)">IFSC Code:</span>
+                    <span style="font-weight:600;font-family:monospace;letter-spacing:1px">UBIN0805700</span>
+                    <span style="color:var(--clr-text-muted)">Bank:</span>
+                    <span style="font-weight:600">Union Bank of India</span>
+                  </div>
+                </div>
+              <!-- Cash on Delivery Details -->
+              <div id="cash-details" style="display:none;margin-top:16px">
+                <div style="background:var(--clr-bg-alt);border:1.5px solid rgba(34,197,94,.35);border-radius:var(--radius-md);padding:20px;text-align:center">
+                  <div style="font-size:2.5rem;margin-bottom:6px">💵</div>
+                  <h4 style="font-size:1.1rem;color:#22c55e;margin-bottom:6px;font-weight:700">Cash on Delivery (COD) Selected</h4>
+                  <p style="font-size:.88rem;color:var(--clr-text-muted);margin-bottom:12px;line-height:1.5">
+                    Pay with cash when your food is delivered to your doorstep. No advance online payment required!
+                  </p>
+                  <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(34,197,94,.1);border-radius:var(--radius-full);color:#22c55e;font-size:.85rem;font-weight:600">
+                    <span>✓</span> Keep <strong id="cash-detail-amount" style="font-weight:700;color:var(--clr-text)">₹0.00</strong> cash ready upon delivery
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-full" style="margin-top:20px" id="pay-btn">
+                🛒 Place Order — <span id="pay-total">₹0.00</span>
+              </button>
+            </form>
+          </div>
+          <div class="order-summary-card">
+            <h3>Order Summary</h3>
+            <div id="checkout-items-list"></div>
+            <div class="summary-total">
+              <span>Total</span>
+              <span class="amount" id="checkout-total">₹0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       FOOTER
+       ============================================================ -->
+  <footer class="main-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="logo">
+            <div class="logo-icon">🍽</div>
+            <span>FoodFleet</span>
+          </div>
+          <p>The fastest way to get your favorite food delivered. Fresh, fast, and delicious — every single order.</p>
+          <div class="footer-social">
+            <a href="#" aria-label="Facebook">📘</a>
+            <a href="#" aria-label="Twitter">🐦</a>
+            <a href="#" aria-label="Instagram">📸</a>
+            <a href="#" aria-label="YouTube">▶️</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#">About Us</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">Press</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Support</h4>
+          <ul>
+            <li><a href="#">Help Center</a></li>
+            <li><a href="#">Contact Us</a></li>
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>For Restaurants</h4>
+          <ul>
+            <li><a href="#">Partner with Us</a></li>
+            <li><a href="#">Restaurant Dashboard</a></li>
+            <li><a href="#">Marketing Tools</a></li>
+            <li><a href="#">API Docs</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>© 2026 FoodFleet. All rights reserved. Designed by <strong style="color:var(--clr-primary)">Indukuru's Family</strong> ❤️</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Payment Confirmation Dialog -->
+  <dialog id="payment-confirm-dialog" style="max-width:460px;width:92%;border:none;border-radius:var(--radius-lg);background:var(--clr-surface);color:var(--clr-text);padding:0;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+    <div id="payment-confirm-body" style="padding:28px;text-align:center">
+      <!-- Dynamically populated by JS -->
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
