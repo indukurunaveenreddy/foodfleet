@@ -511,10 +511,24 @@ function setAdminSessionActive(active, memberName) {
   updateAdminNavUI();
 }
 
+let selectedCollaboratorForUnlock = null;
+
+function handleCollaboratorHeaderClick() {
+  if (isAdminAuthorized()) {
+    navigateTo('admin');
+  } else {
+    openAdminAccessModal();
+  }
+}
+
 function updateAdminNavUI() {
   const isAuth = isAdminAuthorized();
   const desktopLink = document.getElementById('nav-admin-link');
   const mobileLink = document.getElementById('mobile-nav-admin-link');
+  const headerCollabBtn = document.getElementById('header-collab-btn');
+  const headerCollabText = document.getElementById('header-collab-text');
+  const mobileCollabBtn = document.getElementById('mobile-collab-btn');
+  const bottomCollabBtn = document.getElementById('bottom-collab-btn');
   const activeNameEl = document.getElementById('admin-active-member-name');
 
   if (desktopLink) {
@@ -522,6 +536,26 @@ function updateAdminNavUI() {
   }
   if (mobileLink) {
     mobileLink.style.display = isAuth ? 'block' : 'none';
+  }
+  if (headerCollabBtn) {
+    if (isAuth) {
+      headerCollabBtn.classList.add('active-admin');
+      if (headerCollabText) headerCollabText.textContent = 'Admin Dashboard';
+      headerCollabBtn.title = '👑 Admin Dashboard (Authorized)';
+    } else {
+      headerCollabBtn.classList.remove('active-admin');
+      if (headerCollabText) headerCollabText.textContent = 'Collaborators';
+      headerCollabBtn.title = 'Collaborator Portal (PIN Required)';
+    }
+  }
+  if (mobileCollabBtn) {
+    mobileCollabBtn.textContent = isAuth ? '👑 Admin Dashboard' : '👑 Collaborators Portal';
+    mobileCollabBtn.style.color = isAuth ? '#10b981' : '#f59e0b';
+  }
+  if (bottomCollabBtn) {
+    const label = bottomCollabBtn.querySelector('.bottom-nav-label');
+    if (label) label.textContent = isAuth ? 'Admin' : 'Staff';
+    bottomCollabBtn.style.color = isAuth ? '#10b981' : '';
   }
   if (activeNameEl && isAuth) {
     activeNameEl.textContent = getActiveAdminCollaborator();
@@ -532,14 +566,17 @@ function openAdminAccessModal() {
   const dialog = document.getElementById('admin-auth-dialog');
   if (!dialog) return;
 
-  renderCollaboratorModalCards();
+  selectedCollaboratorForUnlock = null;
+  const pinSection = document.getElementById('collaborator-pin-section');
+  if (pinSection) pinSection.style.display = 'none';
 
   const pinInput = document.getElementById('admin-pin-input');
   if (pinInput) {
     pinInput.value = '';
-    setTimeout(() => pinInput.focus(), 150);
+    pinInput.style.border = '';
   }
 
+  renderCollaboratorModalCards();
   dialog.showModal();
 }
 
@@ -553,66 +590,85 @@ function renderCollaboratorModalCards() {
   if (!listEl) return;
   const collabs = getAdminCollaborators();
 
-  listEl.innerHTML = collabs.map((c) => `
-    <div onclick="quickUnlockAsCollaborator('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);border-radius:var(--radius-md);cursor:pointer;transition:transform .15s,border-color .15s" onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateX(4px)'" onmouseout="this.style.borderColor='var(--clr-surface-border)';this.style.transform='none'">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:34px;height:34px;border-radius:var(--radius-full);background:${c.color}22;color:${c.color};font-weight:800;display:grid;place-items:center;font-size:.85rem;border:1.5px solid ${c.color}">
+  listEl.innerHTML = collabs.map((c) => {
+    const isSelected = selectedCollaboratorForUnlock === c.id;
+    return `
+    <div onclick="selectCollaboratorForPIN('${c.id}')" 
+         role="button"
+         tabindex="0"
+         style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:${isSelected ? 'rgba(245,158,11,0.12)' : 'var(--clr-bg-alt)'};border:2px solid ${isSelected ? '#f59e0b' : 'var(--clr-surface-border)'};border-radius:var(--radius-md);cursor:pointer;transition:all .18s ease;box-shadow:${isSelected ? '0 0 14px rgba(245,158,11,0.3)' : 'none'}" 
+         onmouseover="if('${selectedCollaboratorForUnlock}' !== '${c.id}') { this.style.borderColor='${c.color}';this.style.transform='translateX(4px)'; }" 
+         onmouseout="if('${selectedCollaboratorForUnlock}' !== '${c.id}') { this.style.borderColor='var(--clr-surface-border)';this.style.transform='none'; }">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:38px;height:38px;border-radius:var(--radius-full);background:${c.color}25;color:${c.color};font-weight:800;display:grid;place-items:center;font-size:.95rem;border:2px solid ${c.color}">
           ${c.badge.split(' ')[0]}
         </div>
         <div>
-          <div style="font-weight:700;font-size:.88rem;color:var(--clr-text)">${c.name}</div>
+          <div style="font-weight:700;font-size:.92rem;color:var(--clr-text);display:flex;align-items:center;gap:6px">
+            ${c.name}
+            ${isSelected ? '<span style="font-size:.7rem;background:#f59e0b;color:#000;font-weight:800;padding:1px 6px;border-radius:4px">SELECTED</span>' : ''}
+          </div>
           <div style="font-size:.75rem;color:var(--clr-text-muted)">${c.role} · ${c.email}</div>
         </div>
       </div>
-      <span style="font-size:.78rem;font-weight:700;color:${c.color};padding:3px 8px;border-radius:var(--radius-full);background:${c.color}15">
-        Select →
-      </span>
+      <div style="font-size:.8rem;font-weight:700;color:${c.color};padding:5px 12px;border-radius:var(--radius-full);background:${c.color}18;display:flex;align-items:center;gap:4px">
+        ${isSelected ? '🔑 Enter PIN' : 'Click to Enter PIN →'}
+      </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
-function quickUnlockAsCollaborator(collabId) {
+function selectCollaboratorForPIN(collabId) {
+  selectedCollaboratorForUnlock = collabId;
   const collabs = getAdminCollaborators();
   const collab = collabs.find(c => c.id === collabId) || collabs[0];
+
+  renderCollaboratorModalCards();
+
+  const pinSection = document.getElementById('collaborator-pin-section');
+  const nameEl = document.getElementById('pin-selected-name');
+  const badgeEl = document.getElementById('pin-selected-badge');
   const pinInput = document.getElementById('admin-pin-input');
-  const enteredPin = pinInput ? pinInput.value.trim() : '';
-  const masterPin = getAdminMasterPIN();
 
-  if (!enteredPin) {
-    showToast(`🔑 Please enter the 4-digit PIN above to authenticate as ${collab.name}`, 'info');
-    if (pinInput) pinInput.focus();
-    return;
+  if (nameEl) nameEl.textContent = collab.name;
+  if (badgeEl) badgeEl.textContent = collab.badge.split(' ')[0];
+
+  if (pinSection) {
+    pinSection.style.display = 'block';
+    pinSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  if (enteredPin === masterPin) {
-    setAdminSessionActive(true, `${collab.name} (${collab.role})`);
-    closeAdminAuthDialog();
-    navigateTo('admin');
-    showToast(`👑 Welcome, ${collab.name}! Collaborator access granted.`, 'success');
-  } else {
-    showToast('❌ Invalid PIN. Please enter the correct 4-digit PIN.', 'error');
-    if (pinInput) {
-      pinInput.style.border = '2px solid #ef4444';
-      pinInput.focus();
-    }
+  if (pinInput) {
+    pinInput.value = '';
+    pinInput.style.border = '1.5px solid #f59e0b';
+    setTimeout(() => pinInput.focus(), 100);
   }
+}
+
+function cancelCollaboratorSelect() {
+  selectedCollaboratorForUnlock = null;
+  const pinSection = document.getElementById('collaborator-pin-section');
+  if (pinSection) pinSection.style.display = 'none';
+  renderCollaboratorModalCards();
 }
 
 function handleAdminPINUnlock(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   const pinInput = document.getElementById('admin-pin-input');
   const entered = pinInput ? pinInput.value.trim() : '';
   const masterPin = getAdminMasterPIN();
   const collabs = getAdminCollaborators();
 
+  const activeCollab = collabs.find(c => c.id === selectedCollaboratorForUnlock) || collabs[0];
+
   if (entered === masterPin) {
-    const owner = collabs[0];
-    setAdminSessionActive(true, `${owner.name} (${owner.role})`);
+    setAdminSessionActive(true, `${activeCollab.name} (${activeCollab.role})`);
     closeAdminAuthDialog();
     navigateTo('admin');
-    showToast(`👑 Admin unlocked! Welcome ${owner.name}.`, 'success');
+    showToast(`👑 Welcome, ${activeCollab.name}! Collaborator Admin Portal unlocked.`, 'success');
   } else {
-    showToast('❌ Incorrect PIN. Access is restricted to the 3 authorized collaborators.', 'error');
+    showToast('❌ Incorrect PIN. Please enter the valid 4-digit PIN for Collaborators.', 'error');
     if (pinInput) {
       pinInput.style.border = '2px solid #ef4444';
       pinInput.value = '';

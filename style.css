@@ -267,6 +267,44 @@ h3 {
   gap: 12px
 }
 
+/* Collaborator portal header button */
+.collab-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 15px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(239, 68, 68, 0.15));
+  border: 1.5px solid rgba(245, 158, 11, 0.45);
+  color: #f59e0b;
+  font-weight: 700;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.collab-header-btn:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.28), rgba(239, 68, 68, 0.28));
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.28);
+}
+
+.collab-header-btn.active-admin {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #10b981;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+}
+
+@media (max-width: 600px) {
+  .collab-header-btn .collab-header-text {
+    display: none;
+  }
+  .collab-header-btn {
+    padding: 8px 10px;
+  }
+}
+
 /* Cart button */
 .cart-btn {
   position: relative;

@@ -47,6 +47,12 @@
           </div>
         </div>
 
+        <!-- Collaborator Portal Icon Button -->
+        <button class="collab-header-btn" id="header-collab-btn" onclick="handleCollaboratorHeaderClick()" title="Collaborators Portal" aria-label="Collaborators Portal">
+          <span style="font-size:1.1rem">👑</span>
+          <span class="collab-header-text" id="header-collab-text">Collaborators</span>
+        </button>
+
         <button class="cart-btn" id="open-cart" onclick="toggleCart()">
           🛒 Cart
           <span class="cart-badge" id="cart-badge" style="display:none">0</span>
@@ -65,7 +71,8 @@
     <a href="#" data-page="restaurants" onclick="toggleMobileNav()">🏪 Restaurants</a>
     <a href="#" data-page="menu" onclick="toggleMobileNav()">🍽 Menu</a>
     <a href="#" data-page="tracking" onclick="toggleMobileNav()">📦 Track Order</a>
-    <a href="#" data-page="admin" id="mobile-nav-admin-link" style="display:none;color:#f59e0b;font-weight:700" onclick="toggleMobileNav()">👑 Admin Portal</a>
+    <a href="javascript:void(0)" onclick="toggleMobileNav();handleCollaboratorHeaderClick()" style="color:#f59e0b;font-weight:700" id="mobile-collab-btn">👑 Collaborators Portal</a>
+    <a href="#" data-page="admin" id="mobile-nav-admin-link" style="display:none;color:#10b981;font-weight:700" onclick="toggleMobileNav()">👑 Admin Dashboard</a>
     <div style="margin-top:20px;display:flex;gap:12px;width:82%;max-width:300px" id="mobile-nav-auth">
       <button class="btn btn-secondary" style="flex:1;padding:12px 16px;font-size:.9rem" onclick="toggleMobileNav();openAuthDialog('login')">Log In</button>
       <button class="btn btn-primary" style="flex:1;padding:12px 16px;font-size:.9rem" onclick="toggleMobileNav();openAuthDialog('signup')">Sign Up</button>
@@ -138,50 +145,56 @@
   <!-- ============================================================
        ADMIN & COLLABORATOR AUTHENTICATION DIALOG
        ============================================================ -->
-  <dialog id="admin-auth-dialog" style="max-width:440px;width:92%">
+  <dialog id="admin-auth-dialog" style="max-width:480px;width:92%">
     <div class="dialog-header">
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:1.6rem">👑</span>
         <div>
-          <h2 style="font-size:1.15rem;margin:0;font-weight:700">Admin & Collaborator Portal</h2>
-          <p style="font-size:.76rem;color:var(--clr-text-muted);margin:0">Private Access: Indukuru Naveen Reddy & 2 Collaborators</p>
+          <h2 style="font-size:1.15rem;margin:0;font-weight:700">Collaborator Portal</h2>
+          <p style="font-size:.76rem;color:var(--clr-text-muted);margin:0">Private Access: Indukuru's Family & Co-Owners</p>
         </div>
       </div>
       <button class="dialog-close" onclick="closeAdminAuthDialog()">✕</button>
     </div>
     <div class="dialog-body" style="padding:20px">
-      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-md);padding:14px;margin-bottom:18px;text-align:left">
-        <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#f59e0b;font-size:.85rem;margin-bottom:4px">
-          <span>🛡️</span> Private Administrator Area
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;text-align:left">
+        <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:#f59e0b;font-size:.85rem;margin-bottom:2px">
+          <span>👥</span> Step 1: Click your Collaborator Profile
         </div>
-        <p style="font-size:.8rem;color:var(--clr-text-muted);margin:0;line-height:1.45">
-          This dashboard is hidden from customers. Strictly reserved for <strong style="color:var(--clr-text)">Indukuru Naveen Reddy</strong> and the <strong style="color:var(--clr-text)">2 collaborated members</strong>.
+        <p style="font-size:.78rem;color:var(--clr-text-muted);margin:0">
+          Click your icon below, then enter your 4-digit PIN to access the Admin Dashboard.
         </p>
       </div>
 
-      <form id="admin-pin-form" onsubmit="handleAdminPINUnlock(event)">
-        <label for="admin-pin-input" style="display:block;font-size:.85rem;font-weight:700;margin-bottom:8px;text-align:left">
-          🔑 Enter 4-Digit Collaborator PIN:
-        </label>
-        <div style="display:flex;gap:10px;margin-bottom:8px">
-          <input type="password" id="admin-pin-input" class="form-control" placeholder="••••" maxlength="8" style="font-size:1.4rem;letter-spacing:6px;text-align:center;font-family:monospace;flex:1;background:var(--clr-bg-alt);border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md)" required autocomplete="off">
-          <button type="submit" class="btn btn-primary" style="padding:10px 20px;font-weight:700;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;box-shadow:0 4px 16px rgba(245,158,11,.3);cursor:pointer">
-            🔓 Unlock
-          </button>
-        </div>
-        <p style="font-size:.76rem;color:var(--clr-text-muted);margin:0 0 16px;text-align:left">
-          🔒 Private Master PIN is confidential — known only to Owner & Collaborators.
-        </p>
-      </form>
-
-      <div style="position:relative;text-align:center;margin:16px 0">
-        <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:var(--clr-surface-border)"></div>
-        <span style="position:relative;background:var(--clr-surface);padding:0 12px;font-size:.76rem;color:var(--clr-text-muted);font-weight:600">AUTHORIZED MEMBERS</span>
+      <!-- 3 Collaborator Profiles to Click -->
+      <div id="collaborator-quick-select" style="display:flex;flex-direction:column;gap:10px;text-align:left;margin-bottom:16px">
+        <!-- Rendered dynamically by JS -->
       </div>
 
-      <!-- 3 Collaborator Profiles -->
-      <div id="collaborator-quick-select" style="display:flex;flex-direction:column;gap:8px;text-align:left">
-        <!-- Rendered by JS -->
+      <!-- PIN Input Area — Appears upon clicking a collaborator profile -->
+      <div id="collaborator-pin-section" style="display:none;background:var(--clr-bg-alt);border:1.5px solid rgba(245,158,11,0.45);border-radius:var(--radius-md);padding:16px;text-align:left;margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:.85rem;font-weight:700;color:var(--clr-text);display:flex;align-items:center;gap:6px">
+            <span id="pin-selected-badge" style="font-size:1.1rem">👑</span>
+            <span>Enter PIN for <strong id="pin-selected-name" style="color:#f59e0b">Collaborator</strong></span>
+          </div>
+          <button type="button" onclick="cancelCollaboratorSelect()" style="background:none;border:none;color:var(--clr-text-muted);font-size:.75rem;cursor:pointer;text-decoration:underline">Change</button>
+        </div>
+
+        <form id="admin-pin-form" onsubmit="handleAdminPINUnlock(event)">
+          <label for="admin-pin-input" style="display:block;font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--clr-text-muted)">
+            🔑 Enter 4-Digit Security PIN:
+          </label>
+          <div style="display:flex;gap:10px;margin-bottom:8px">
+            <input type="password" id="admin-pin-input" class="form-control" placeholder="••••" maxlength="8" style="font-size:1.4rem;letter-spacing:6px;text-align:center;font-family:monospace;flex:1;background:var(--clr-surface);border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md);padding:10px" required autocomplete="off" inputmode="numeric">
+            <button type="submit" class="btn btn-primary" style="padding:10px 22px;font-weight:700;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;box-shadow:0 4px 16px rgba(245,158,11,.3);cursor:pointer">
+              🔓 Unlock Admin
+            </button>
+          </div>
+          <p style="font-size:.74rem;color:var(--clr-text-muted);margin:0">
+            🔒 Confidential Master PIN shared with Co-owners.
+          </p>
+        </form>
       </div>
     </div>
   </dialog>
@@ -992,6 +1005,10 @@
       <span class="bottom-nav-icon">📦</span>
       <span class="bottom-nav-label">Track</span>
     </a>
+    <button class="bottom-nav-item" onclick="handleCollaboratorHeaderClick()" aria-label="Staff Portal" id="bottom-collab-btn">
+      <span class="bottom-nav-icon">👑</span>
+      <span class="bottom-nav-label">Staff</span>
+    </button>
     <button class="bottom-nav-item bottom-cart-btn" onclick="toggleCart()" aria-label="View Cart">
       <span class="bottom-nav-icon">🛒</span>
       <span class="bottom-nav-label">Cart</span>
