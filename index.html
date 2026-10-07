@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FoodFleet — Online Food Ordering & Delivery</title>
-  <meta name="description" content="FoodFleet: Order delicious food from the best restaurants near you. Fast delivery, easy ordering, and real-time tracking.">
+  <meta name="description"
+    content="FoodFleet: Order delicious food from the best restaurants near you. Fast delivery, easy ordering, and real-time tracking.">
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍕</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍕</text></svg>">
 </head>
+
 <body>
 
   <!-- ============================================================
@@ -25,7 +29,7 @@
         <a href="#" data-page="restaurants">Restaurants</a>
         <a href="#" data-page="menu">Menu</a>
         <a href="#" data-page="tracking">Track Order</a>
-        <a href="#" data-page="admin">Admin</a>
+        <a href="#" data-page="admin" id="nav-admin-link" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,0.18),rgba(239,68,68,0.18));border:1px solid rgba(245,158,11,0.45);border-radius:var(--radius-full);padding:6px 14px;color:#f59e0b;font-weight:700">👑 Admin Portal</a>
       </nav>
 
       <div class="header-actions">
@@ -57,11 +61,15 @@
 
   <!-- Mobile nav -->
   <div class="mobile-nav" id="mobile-nav">
-    <a href="#" data-page="home" onclick="toggleMobileNav()">Home</a>
-    <a href="#" data-page="restaurants" onclick="toggleMobileNav()">Restaurants</a>
-    <a href="#" data-page="menu" onclick="toggleMobileNav()">Menu</a>
-    <a href="#" data-page="tracking" onclick="toggleMobileNav()">Track Order</a>
-    <a href="#" data-page="admin" onclick="toggleMobileNav()">Admin</a>
+    <a href="#" data-page="home" onclick="toggleMobileNav()">🏠 Home</a>
+    <a href="#" data-page="restaurants" onclick="toggleMobileNav()">🏪 Restaurants</a>
+    <a href="#" data-page="menu" onclick="toggleMobileNav()">🍽 Menu</a>
+    <a href="#" data-page="tracking" onclick="toggleMobileNav()">📦 Track Order</a>
+    <a href="#" data-page="admin" id="mobile-nav-admin-link" style="display:none;color:#f59e0b;font-weight:700" onclick="toggleMobileNav()">👑 Admin Portal</a>
+    <div style="margin-top:20px;display:flex;gap:12px;width:82%;max-width:300px" id="mobile-nav-auth">
+      <button class="btn btn-secondary" style="flex:1;padding:12px 16px;font-size:.9rem" onclick="toggleMobileNav();openAuthDialog('login')">Log In</button>
+      <button class="btn btn-primary" style="flex:1;padding:12px 16px;font-size:.9rem" onclick="toggleMobileNav();openAuthDialog('signup')">Sign Up</button>
+    </div>
   </div>
 
   <!-- ============================================================
@@ -114,7 +122,8 @@
         </div>
         <div class="form-group">
           <label for="signup-password">Password</label>
-          <input type="password" id="signup-password" class="form-control" placeholder="Min 6 characters" required minlength="6">
+          <input type="password" id="signup-password" class="form-control" placeholder="Min 6 characters" required
+            minlength="6">
         </div>
         <div class="form-group">
           <label for="signup-address">Delivery Address</label>
@@ -123,6 +132,57 @@
         <button type="submit" class="btn btn-primary btn-full">Create Account</button>
         <p class="form-footer">Already have an account? <a href="#" onclick="switchAuthTab('login')">Log in</a></p>
       </form>
+    </div>
+  </dialog>
+
+  <!-- ============================================================
+       ADMIN & COLLABORATOR AUTHENTICATION DIALOG
+       ============================================================ -->
+  <dialog id="admin-auth-dialog" style="max-width:440px;width:92%">
+    <div class="dialog-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.6rem">👑</span>
+        <div>
+          <h2 style="font-size:1.15rem;margin:0;font-weight:700">Admin & Collaborator Portal</h2>
+          <p style="font-size:.76rem;color:var(--clr-text-muted);margin:0">Private Access: Indukuru Naveen Reddy & 2 Collaborators</p>
+        </div>
+      </div>
+      <button class="dialog-close" onclick="closeAdminAuthDialog()">✕</button>
+    </div>
+    <div class="dialog-body" style="padding:20px">
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-md);padding:14px;margin-bottom:18px;text-align:left">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#f59e0b;font-size:.85rem;margin-bottom:4px">
+          <span>🛡️</span> Private Administrator Area
+        </div>
+        <p style="font-size:.8rem;color:var(--clr-text-muted);margin:0;line-height:1.45">
+          This dashboard is hidden from customers. Strictly reserved for <strong style="color:var(--clr-text)">Indukuru Naveen Reddy</strong> and the <strong style="color:var(--clr-text)">2 collaborated members</strong>.
+        </p>
+      </div>
+
+      <form id="admin-pin-form" onsubmit="handleAdminPINUnlock(event)">
+        <label for="admin-pin-input" style="display:block;font-size:.85rem;font-weight:700;margin-bottom:8px;text-align:left">
+          🔑 Enter 4-Digit Collaborator PIN:
+        </label>
+        <div style="display:flex;gap:10px;margin-bottom:8px">
+          <input type="password" id="admin-pin-input" class="form-control" placeholder="••••" maxlength="8" style="font-size:1.4rem;letter-spacing:6px;text-align:center;font-family:monospace;flex:1;background:var(--clr-bg-alt);border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md)" required autocomplete="off">
+          <button type="submit" class="btn btn-primary" style="padding:10px 20px;font-weight:700;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;box-shadow:0 4px 16px rgba(245,158,11,.3);cursor:pointer">
+            🔓 Unlock
+          </button>
+        </div>
+        <p style="font-size:.76rem;color:var(--clr-text-muted);margin:0 0 16px;text-align:left">
+          🔒 Private Master PIN is confidential — known only to Owner & Collaborators.
+        </p>
+      </form>
+
+      <div style="position:relative;text-align:center;margin:16px 0">
+        <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:var(--clr-surface-border)"></div>
+        <span style="position:relative;background:var(--clr-surface);padding:0 12px;font-size:.76rem;color:var(--clr-text-muted);font-weight:600">AUTHORIZED MEMBERS</span>
+      </div>
+
+      <!-- 3 Collaborator Profiles -->
+      <div id="collaborator-quick-select" style="display:flex;flex-direction:column;gap:8px;text-align:left">
+        <!-- Rendered by JS -->
+      </div>
     </div>
   </dialog>
 
@@ -140,7 +200,8 @@
         <div class="cart-empty" id="cart-empty">
           <div class="empty-icon">🛒</div>
           <p>Your cart is empty</p>
-          <p style="font-size:.85rem;margin-top:8px;color:var(--clr-text-dim)">Browse our menu and add delicious items!</p>
+          <p style="font-size:.85rem;margin-top:8px;color:var(--clr-text-dim)">Browse our menu and add delicious items!
+          </p>
         </div>
       </div>
       <div class="cart-footer" id="cart-footer" style="display:none">
@@ -175,7 +236,8 @@
               Now delivering in your area
             </div>
             <h1>Delicious Food, <span class="text-gradient">Delivered Fast</span></h1>
-            <p>Order from the best local restaurants with easy online ordering, real-time tracking, and fast delivery right to your doorstep.</p>
+            <p>Order from the best local restaurants with easy online ordering, real-time tracking, and fast delivery
+              right to your doorstep.</p>
             <div class="hero-cta">
               <button class="btn btn-primary" onclick="navigateTo('restaurants')">
                 🍽 Order Now
@@ -200,7 +262,7 @@
             </div>
           </div>
           <div class="hero-image">
-            <img src="hero-burger.jpg" alt="Delicious gourmet burger" width="600" height="375">
+            <img src="images/hero-burger.jpg" alt="Delicious gourmet burger" width="600" height="375">
             <div class="float-card delivery">
               <div class="float-card-icon green">🚴</div>
               <div>
@@ -267,7 +329,8 @@
             <h4>All</h4>
             <p>Everything</p>
           </div>
-          <div class="category-card" data-category="dhaba" onclick="filterCategory('dhaba',this)" style="background:linear-gradient(135deg, rgba(245,158,11,0.18), rgba(239,68,68,0.18));border:1.5px solid rgba(245,158,11,0.45)">
+          <div class="category-card" data-category="dhaba" onclick="filterCategory('dhaba',this)"
+            style="background:linear-gradient(135deg, rgba(245,158,11,0.18), rgba(239,68,68,0.18));border:1.5px solid rgba(245,158,11,0.45)">
             <span class="category-icon">👑</span>
             <h4 style="color:#f59e0b">Indukuru's Dhaba</h4>
             <p>Family Specials</p>
@@ -359,7 +422,9 @@
           <p>Browse our curated selection of top-rated restaurants in your area.</p>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:30px;flex-wrap:wrap">
-          <input type="text" id="restaurant-search" class="form-control" placeholder="🔍 Search restaurants..." style="max-width:400px;border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-full);padding:12px 20px" oninput="searchRestaurants(this.value)">
+          <input type="text" id="restaurant-search" class="form-control" placeholder="🔍 Search restaurants..."
+            style="max-width:400px;border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-full);padding:12px 20px"
+            oninput="searchRestaurants(this.value)">
         </div>
         <div class="restaurant-grid" id="all-restaurants"></div>
       </div>
@@ -382,7 +447,8 @@
             <span class="category-icon">🍽</span>
             <h4>All</h4>
           </div>
-          <div class="category-card" data-category="dhaba" onclick="filterMenu('dhaba',this)" style="background:linear-gradient(135deg, rgba(245,158,11,0.18), rgba(239,68,68,0.18));border:1.5px solid rgba(245,158,11,0.45)">
+          <div class="category-card" data-category="dhaba" onclick="filterMenu('dhaba',this)"
+            style="background:linear-gradient(135deg, rgba(245,158,11,0.18), rgba(239,68,68,0.18));border:1.5px solid rgba(245,158,11,0.45)">
             <span class="category-icon">👑</span>
             <h4 style="color:#f59e0b">Indukuru's Dhaba</h4>
           </div>
@@ -464,6 +530,27 @@
   <div id="page-admin" class="page">
     <section class="admin-section" style="padding-top:calc(var(--header-h) + 40px);min-height:100vh">
       <div class="container">
+        <!-- Admin Access Control Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(245,158,11,0.1);border:1.5px solid rgba(245,158,11,0.35);border-radius:var(--radius-lg);padding:14px 20px;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:1.8rem">👑</span>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <h4 style="margin:0;font-size:1rem;color:#f59e0b">Collaborator Portal Active</h4>
+                <span style="background:#22c55e;color:#fff;font-size:.7rem;padding:2px 8px;border-radius:var(--radius-full);font-weight:700">● SECURE</span>
+              </div>
+              <p style="margin:2px 0 0;font-size:.8rem;color:var(--clr-text-muted)">
+                Logged in as: <strong id="admin-active-member-name" style="color:var(--clr-text)">Indukuru Naveen Reddy (Owner)</strong> · Restricted to 3 Collaborators
+              </p>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button onclick="lockAdminSession()" class="btn btn-secondary" style="font-size:.82rem;padding:8px 16px;border-color:rgba(239,68,68,0.5);color:#ef4444;border-radius:var(--radius-full);background:rgba(239,68,68,0.08);cursor:pointer">
+              🔒 Lock & Exit Admin
+            </button>
+          </div>
+        </div>
+
         <div class="section-header">
           <div class="label">Admin Dashboard</div>
           <h2>Restaurant <span class="text-gradient">Management</span></h2>
@@ -494,6 +581,24 @@
           </div>
         </div>
 
+        <!-- Collaborator Access & Security Box -->
+        <div class="admin-table-wrap" style="margin-bottom:30px;background:var(--clr-surface);border:1.5px solid rgba(245,158,11,0.25)">
+          <div class="admin-table-header" style="background:rgba(245,158,11,0.06);flex-wrap:wrap;gap:12px">
+            <div>
+              <h3 style="color:#f59e0b;display:flex;align-items:center;gap:8px;margin:0">
+                <span>👥</span> Authorized Collaborators (Owner + 2 Members)
+              </h3>
+              <p style="margin:4px 0 0;font-size:.8rem;color:var(--clr-text-muted)">
+                Admin panel is strictly restricted to these 3 accounts. Hidden from all ordinary users and customers.
+              </p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button type="button" onclick="promptChangeAdminPIN()" class="btn btn-secondary" style="padding:6px 14px;font-size:.78rem;border-radius:var(--radius-md)">🔑 Change Master PIN</button>
+            </div>
+          </div>
+          <div style="padding:20px" id="admin-collaborators-list"></div>
+        </div>
+
         <!-- Add Menu Item -->
         <div class="admin-table-wrap" style="margin-bottom:30px">
           <div class="admin-table-header">
@@ -508,13 +613,16 @@
                 </div>
                 <div class="form-group">
                   <label for="new-item-price">Price (₹)</label>
-                  <input type="number" id="new-item-price" class="form-control" placeholder="249" step="1" min="0" required>
+                  <input type="number" id="new-item-price" class="form-control" placeholder="249" step="1" min="0"
+                    required>
                 </div>
               </div>
               <div class="form-row">
                 <div class="form-group">
                   <label for="new-item-category">Category</label>
-                  <select id="new-item-category" class="form-control" style="border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md);background:var(--clr-bg-alt)" required>
+                  <select id="new-item-category" class="form-control"
+                    style="border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md);background:var(--clr-bg-alt)"
+                    required>
                     <option value="">Select category</option>
                     <option value="burger">Burger</option>
                     <option value="pizza">Pizza</option>
@@ -531,12 +639,14 @@
                 </div>
                 <div class="form-group">
                   <label for="new-item-restaurant">Restaurant</label>
-                  <input type="text" id="new-item-restaurant" class="form-control" placeholder="Restaurant name" required>
+                  <input type="text" id="new-item-restaurant" class="form-control" placeholder="Restaurant name"
+                    required>
                 </div>
               </div>
               <div class="form-group">
                 <label for="new-item-desc">Description</label>
-                <input type="text" id="new-item-desc" class="form-control" placeholder="Short description of the dish" required>
+                <input type="text" id="new-item-desc" class="form-control" placeholder="Short description of the dish"
+                  required>
               </div>
               <button type="submit" class="btn btn-primary" style="margin-top:8px">Add Item</button>
             </form>
@@ -615,11 +725,13 @@
               </div>
               <div class="form-group">
                 <label for="checkout-address">Delivery Address</label>
-                <input type="text" id="checkout-address" class="form-control" placeholder="123 MG Road, Hyderabad, Telangana" required>
+                <input type="text" id="checkout-address" class="form-control"
+                  placeholder="123 MG Road, Hyderabad, Telangana" required>
               </div>
               <div class="form-group">
                 <label for="checkout-notes">Delivery Notes (Optional)</label>
-                <input type="text" id="checkout-notes" class="form-control" placeholder="Ring doorbell, leave at door, etc.">
+                <input type="text" id="checkout-notes" class="form-control"
+                  placeholder="Ring doorbell, leave at door, etc.">
               </div>
 
               <h3 style="margin:28px 0 16px">Payment Method</h3>
@@ -645,29 +757,61 @@
               <!-- UPI Details -->
               <div id="upi-details">
                 <div style="text-align:center;margin-bottom:20px">
-                  <p style="font-size:.92rem;color:var(--clr-text-muted);margin-bottom:12px">Scan the QR code to pay via PhonePe / Google Pay / Paytm</p>
-                  <div style="background:#fff;border-radius:var(--radius-lg);padding:16px;display:inline-block;box-shadow:0 4px 20px rgba(0,0,0,.3)">
-                    <img src="phonepe-qr.jpg" alt="PhonePe QR Code — INDUKURU MANVITHA" style="width:220px;height:auto;border-radius:8px">
+                  <p style="font-size:.92rem;color:var(--clr-text-muted);margin-bottom:12px">Scan the QR code to pay via
+                    PhonePe / Google Pay / Paytm</p>
+                  <div
+                    style="background:#fff;border-radius:var(--radius-lg);padding:16px;display:inline-block;box-shadow:0 4px 20px rgba(0,0,0,.3)">
+                    <img src="images/phonepe-qr.jpg" alt="PhonePe QR Code — INDUKURU MANVITHA"
+                      style="width:220px;height:auto;border-radius:8px">
                   </div>
-                  <p style="margin-top:12px;font-weight:600;color:var(--clr-text);font-size:.95rem">INDUKURU MANVITHA</p>
+                  <p style="margin-top:12px;font-weight:600;color:var(--clr-text);font-size:.95rem">INDUKURU MANVITHA
+                  </p>
                   <p style="font-size:.82rem;color:var(--clr-text-muted)">PhonePe · UPI Payments Accepted</p>
-                  <div style="margin-top:10px;padding:10px 20px;background:var(--clr-bg-alt);border:1px dashed var(--clr-primary);border-radius:var(--radius-md);display:inline-block">
-                    <p style="font-size:.75rem;color:var(--clr-text-muted);margin-bottom:2px">Or pay directly to UPI ID:</p>
-                    <p style="font-weight:700;font-family:monospace;font-size:1rem;color:var(--clr-primary);letter-spacing:.5px">8639866865@ybl</p>
+                  <div
+                    style="margin-top:10px;padding:10px 20px;background:var(--clr-bg-alt);border:1px dashed var(--clr-primary);border-radius:var(--radius-md);display:inline-block">
+                    <p style="font-size:.75rem;color:var(--clr-text-muted);margin-bottom:2px">Or pay directly to UPI ID:
+                    </p>
+                    <p
+                      style="font-weight:700;font-family:monospace;font-size:1rem;color:var(--clr-primary);letter-spacing:.5px">
+                      8639866865@ybl</p>
+                  </div>
+                  <div style="margin-top:10px">
+                    <button type="button" class="btn btn-secondary" onclick="openUPIModalFromCheckout()" style="font-size:.82rem;padding:7px 16px;border-radius:var(--radius-full)">
+                      🔍 Open QR Code Scanner Modal
+                    </button>
                   </div>
                 </div>
                 <div style="border-top:1px solid var(--clr-surface-border);padding-top:16px">
-                  <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:8px">Or enter your UPI ID manually:</p>
+                  <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:8px">Or enter your UPI ID
+                    manually:</p>
                   <div class="form-group">
                     <label for="upi-id">UPI ID</label>
                     <input type="text" id="upi-id" class="form-control" placeholder="yourname@ybl / yourname@paytm">
                   </div>
                   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@ybl'">📲 PhonePe</span>
-                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@okaxis'">💰 Google Pay</span>
-                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@paytm'">🅿️ Paytm</span>
-                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@upi'">🏛 BHIM</span>
-                    <span style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('upi-id').value='@apl'">📦 Amazon Pay</span>
+                    <span
+                      style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer"
+                      onclick="document.getElementById('upi-id').value='@ybl'">📲 PhonePe</span>
+                    <span
+                      style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer"
+                      onclick="document.getElementById('upi-id').value='@okaxis'">💰 Google Pay</span>
+                    <span
+                      style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer"
+                      onclick="document.getElementById('upi-id').value='@paytm'">🅿️ Paytm</span>
+                    <span
+                      style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer"
+                      onclick="document.getElementById('upi-id').value='@upi'">🏛 BHIM</span>
+                    <span
+                      style="padding:6px 14px;border-radius:var(--radius-full);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);font-size:.82rem;cursor:pointer"
+                      onclick="document.getElementById('upi-id').value='@apl'">📦 Amazon Pay</span>
+                  </div>
+
+                  <div class="form-group" style="margin-top:16px;padding:16px;border-radius:var(--radius-md);background:var(--clr-bg-alt);border:1.5px solid rgba(255,107,53,.35)">
+                    <label for="checkout-utr" style="font-weight:700;color:var(--clr-primary);display:block;margin-bottom:6px">
+                      📱 UTR / UPI Transaction ID *
+                    </label>
+                    <input type="text" id="checkout-utr" class="form-control" placeholder="Enter 12-digit UTR from PhonePe / GPay / Paytm" style="font-family:monospace;letter-spacing:1px;background:var(--clr-surface);border:1.5px solid var(--clr-surface-border);padding:12px 16px;border-radius:var(--radius-md);width:100%" oninput="validatePaymentInputs()" onkeyup="validatePaymentInputs()" onpaste="setTimeout(validatePaymentInputs,50)">
+                    <p style="font-size:.78rem;color:var(--clr-text-muted);margin-top:6px">💡 Scan QR code above, pay, then enter UTR number to enable the Place Order button.</p>
                   </div>
                 </div>
               </div>
@@ -676,7 +820,8 @@
               <div id="card-details" style="display:none">
                 <div class="form-group">
                   <label for="card-number">Card Number</label>
-                  <input type="text" id="card-number" class="form-control" placeholder="4242 4242 4242 4242" maxlength="19">
+                  <input type="text" id="card-number" class="form-control" placeholder="4242 4242 4242 4242"
+                    maxlength="19">
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -694,13 +839,14 @@
               <div id="netbanking-details" style="display:none">
                 <div class="form-group">
                   <label for="bank-select">Select Your Bank</label>
-                  <select id="bank-select" class="form-control" style="border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md);background:var(--clr-bg-alt)">
+                  <select id="bank-select" class="form-control"
+                    style="border:1.5px solid var(--clr-surface-border);border-radius:var(--radius-md);background:var(--clr-bg-alt)">
                     <option value="">Choose a bank</option>
                     <option value="sbi">State Bank of India (SBI)</option>
                     <option value="hdfc">HDFC Bank</option>
                     <option value="icici">ICICI Bank</option>
                     <option value="axis">Axis Bank</option>
-                    <option value="union">Union Bank of India</option>
+                    <option value="union" selected>Union Bank of India</option>
                     <option value="kotak">Kotak Mahindra Bank</option>
                     <option value="bob">Bank of Baroda</option>
                     <option value="pnb">Punjab National Bank</option>
@@ -709,8 +855,10 @@
                     <option value="yes">Yes Bank</option>
                   </select>
                 </div>
-                <div style="margin-top:16px;padding:16px;border-radius:var(--radius-md);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border)">
-                  <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:8px">💳 Beneficiary Account Details:</p>
+                <div
+                  style="margin-top:16px;padding:16px;border-radius:var(--radius-md);background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border)">
+                  <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:8px">💳 Beneficiary Account
+                    Details:</p>
                   <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.88rem">
                     <span style="color:var(--clr-text-muted)">Account Name:</span>
                     <span style="font-weight:600">INDUKURU MANVITHA</span>
@@ -721,22 +869,39 @@
                     <span style="color:var(--clr-text-muted)">Bank:</span>
                     <span style="font-weight:600">Union Bank of India</span>
                   </div>
+                  <div style="margin-top:12px;text-align:center">
+                    <button type="button" class="btn btn-secondary" onclick="openNetBankingModalFromCheckout()" style="font-size:.82rem;padding:7px 16px;border-radius:var(--radius-full)">
+                      🔍 Open Net Banking Transfer Modal
+                    </button>
+                  </div>
                 </div>
+                <div class="form-group" style="margin-top:16px;padding:16px;border-radius:var(--radius-md);background:var(--clr-bg-alt);border:1.5px solid rgba(59,130,246,.35)">
+                  <label for="checkout-ntr" style="font-weight:700;color:#3b82f6;display:block;margin-bottom:6px">
+                    🏦 NTR / Transaction Reference Number *
+                  </label>
+                  <input type="text" id="checkout-ntr" class="form-control" placeholder="Enter NTR / NEFT / IMPS Reference Number" style="font-family:monospace;letter-spacing:1px;background:var(--clr-surface);border:1.5px solid var(--clr-surface-border);padding:12px 16px;border-radius:var(--radius-md);width:100%" oninput="validatePaymentInputs()" onkeyup="validatePaymentInputs()" onpaste="setTimeout(validatePaymentInputs,50)">
+                  <p style="font-size:.78rem;color:var(--clr-text-muted);margin-top:6px">💡 Transfer amount to beneficiary account above, then enter NTR to enable Place Order button.</p>
+                </div>
+              </div>
+
               <!-- Cash on Delivery Details -->
               <div id="cash-details" style="display:none;margin-top:16px">
-                <div style="background:var(--clr-bg-alt);border:1.5px solid rgba(34,197,94,.35);border-radius:var(--radius-md);padding:20px;text-align:center">
-                  <div style="font-size:2.5rem;margin-bottom:6px">💵</div>
-                  <h4 style="font-size:1.1rem;color:#22c55e;margin-bottom:6px;font-weight:700">Cash on Delivery (COD) Selected</h4>
+                <div
+                  style="background:var(--clr-bg-alt);border:1.5px solid rgba(34,197,94,.35);border-radius:var(--radius-md);padding:20px;text-align:center">
+                  <div style="font-size:2.8rem;margin-bottom:6px">💵</div>
+                  <h4 style="font-size:1.15rem;color:#22c55e;margin-bottom:6px;font-weight:700">Cash on Delivery (COD) Selected</h4>
                   <p style="font-size:.88rem;color:var(--clr-text-muted);margin-bottom:12px;line-height:1.5">
                     Pay with cash when your food is delivered to your doorstep. No advance online payment required!
                   </p>
-                  <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(34,197,94,.1);border-radius:var(--radius-full);color:#22c55e;font-size:.85rem;font-weight:600">
-                    <span>✓</span> Keep <strong id="cash-detail-amount" style="font-weight:700;color:var(--clr-text)">₹0.00</strong> cash ready upon delivery
+                  <div
+                    style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(34,197,94,.1);border-radius:var(--radius-full);color:#22c55e;font-size:.85rem;font-weight:600">
+                    <span>✓</span> Keep <strong id="cash-detail-amount"
+                      style="font-weight:700;color:var(--clr-text)">₹0.00</strong> cash ready upon delivery
                   </div>
                 </div>
               </div>
 
-              <button type="submit" class="btn btn-primary btn-full" style="margin-top:20px" id="pay-btn">
+              <button type="submit" class="btn btn-primary btn-full" style="margin-top:24px;padding:16px;font-size:1.05rem;font-weight:700" id="pay-btn">
                 🛒 Place Order — <span id="pay-total">₹0.00</span>
               </button>
             </form>
@@ -798,17 +963,45 @@
             <li><a href="#">Restaurant Dashboard</a></li>
             <li><a href="#">Marketing Tools</a></li>
             <li><a href="#">API Docs</a></li>
+            <li><a href="javascript:void(0)" onclick="openAdminAccessModal()" style="color:#f59e0b;font-weight:600">👑 Collaborator Portal</a></li>
           </ul>
         </div>
       </div>
       <div class="footer-bottom">
-        <p>© 2026 FoodFleet. All rights reserved. Designed by <strong style="color:var(--clr-primary)">Indukuru's Family</strong> ❤️</p>
+        <p>© 2026 FoodFleet. All rights reserved. Designed by <strong style="color:var(--clr-primary)">Indukuru's
+            Family</strong> ❤️ · <a href="javascript:void(0)" onclick="openAdminAccessModal()" style="color:var(--clr-text-muted);font-size:.78rem;text-decoration:none">🔒 Staff & Collaborator Login</a></p>
       </div>
     </div>
   </footer>
 
+  <!-- Mobile App Bottom Navigation Bar -->
+  <nav class="mobile-bottom-bar" id="mobile-bottom-bar" aria-label="Mobile Navigation">
+    <a href="#" data-page="home" class="bottom-nav-item active">
+      <span class="bottom-nav-icon">🏠</span>
+      <span class="bottom-nav-label">Home</span>
+    </a>
+    <a href="#" data-page="restaurants" class="bottom-nav-item">
+      <span class="bottom-nav-icon">🏪</span>
+      <span class="bottom-nav-label">Places</span>
+    </a>
+    <a href="#" data-page="menu" class="bottom-nav-item">
+      <span class="bottom-nav-icon">🍽</span>
+      <span class="bottom-nav-label">Menu</span>
+    </a>
+    <a href="#" data-page="tracking" class="bottom-nav-item">
+      <span class="bottom-nav-icon">📦</span>
+      <span class="bottom-nav-label">Track</span>
+    </a>
+    <button class="bottom-nav-item bottom-cart-btn" onclick="toggleCart()" aria-label="View Cart">
+      <span class="bottom-nav-icon">🛒</span>
+      <span class="bottom-nav-label">Cart</span>
+      <span class="bottom-cart-badge" id="bottom-cart-badge" style="display:none">0</span>
+    </button>
+  </nav>
+
   <!-- Payment Confirmation Dialog -->
-  <dialog id="payment-confirm-dialog" style="max-width:460px;width:92%;border:none;border-radius:var(--radius-lg);background:var(--clr-surface);color:var(--clr-text);padding:0;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+  <dialog id="payment-confirm-dialog"
+    style="max-width:460px;width:92%;border:none;border-radius:var(--radius-lg);background:var(--clr-surface);color:var(--clr-text);padding:0;box-shadow:0 24px 60px rgba(0,0,0,.6)">
     <div id="payment-confirm-body" style="padding:28px;text-align:center">
       <!-- Dynamically populated by JS -->
     </div>
@@ -816,4 +1009,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>

@@ -31,18 +31,18 @@ function formatPrice(amount) {
 // IMAGE MAP — maps category to the food images we have
 // ============================================================
 const IMAGE_MAP = {
-  burger:   'hero-burger.jpg',
-  pizza:    'pizza.jpg',
-  sushi:    'sushi.jpg',
-  pasta:    'pasta.jpg',
-  tacos:    'tacos.jpg',
-  salad:    'salad.jpg',
-  dessert:  'pasta.jpg',
-  icecream: 'icecream.jpg',
-  drinks:   'drinks.jpg',
-  biryani:  'biryani.jpg',
-  chinese:  'chinese.jpg',
-  sandwich: 'hero-burger.jpg',
+  burger:   'images/hero-burger.jpg',
+  pizza:    'images/pizza.jpg',
+  sushi:    'images/sushi.jpg',
+  pasta:    'images/pasta.jpg',
+  tacos:    'images/tacos.jpg',
+  salad:    'images/salad.jpg',
+  dessert:  'images/pasta.jpg',
+  icecream: 'images/icecream.jpg',
+  drinks:   'images/drinks.jpg',
+  biryani:  'images/biryani.jpg',
+  chinese:  'images/chinese.jpg',
+  sandwich: 'images/hero-burger.jpg',
 };
 
 // ============================================================
@@ -388,14 +388,322 @@ function initializeData() {
   DB.set('restaurants', SEED_RESTAURANTS);
   DB.set('menu', SEED_MENU);
   if (!DB.get('orders')) DB.set('orders', SEED_ORDERS);
-  if (!DB.get('users')) DB.set('users', []);
+
+  // Pre-seed collaborator users if not present
+  const users = DB.get('users') || [];
+  if (!users.some(u => u.email === 'naveen@indukuru.com')) {
+    users.push({
+      id: 'u_admin_1', fname: 'Naveen', lname: 'Reddy', email: 'naveen@indukuru.com',
+      password: 'admin', role: 'admin', phone: '8639866865', address: 'Indukuru Dhaba, Hyderabad'
+    });
+  }
+  if (!users.some(u => u.email === 'manvitha@indukuru.com')) {
+    users.push({
+      id: 'u_admin_2', fname: 'Manvitha', lname: 'Indukuru', email: 'manvitha@indukuru.com',
+      password: 'admin', role: 'admin', phone: '8639866865', address: 'Indukuru Dhaba, Hyderabad'
+    });
+  }
+  if (!users.some(u => u.email === 'lokeshwarichivakala@gmail.com')) {
+    users.push({
+      id: 'u_admin_3', fname: 'Lokeshwari', lname: 'Chivakala', email: 'lokeshwarichivakala@gmail.com',
+      password: 'admin', role: 'admin', phone: '8639866865', address: 'Hyderabad'
+    });
+  }
+  DB.set('users', users);
+
   if (!DB.get('cart')) DB.set('cart', []);
+}
+
+// ============================================================
+// ADMIN & COLLABORATOR ACCESS CONTROL SYSTEM
+// Strictly restricted to Indukuru Naveen Reddy (Owner) & 2 Collaborators
+// ============================================================
+const DEFAULT_COLLABORATORS = [
+  {
+    id: 'collab_1',
+    name: 'Indukuru Naveen Reddy',
+    role: 'Owner & Super Admin',
+    email: 'naveen@indukuru.com',
+    badge: '👑 Owner',
+    phone: '8639866865',
+    color: '#f59e0b',
+  },
+  {
+    id: 'collab_2',
+    name: 'Indukuru Manvitha',
+    role: 'Collaborator 1',
+    email: 'manvitha@indukuru.com',
+    badge: '⭐ Collaborator 1',
+    phone: '8639866865',
+    color: '#3b82f6',
+  },
+  {
+    id: 'collab_3',
+    name: 'Lokeshwari Chivakala',
+    role: 'Collaborator 2 (Administrator)',
+    email: 'lokeshwarichivakala@gmail.com',
+    badge: '⭐ Collaborator 2',
+    phone: '8639866865',
+    color: '#10b981',
+  }
+];
+
+const DEFAULT_ADMIN_PIN = '8639';
+
+function getAdminCollaborators() {
+  const saved = localStorage.getItem('foodfleet_collaborators');
+  if (saved) {
+    try {
+      const list = JSON.parse(saved);
+      // Ensure third collaborator is updated to lokeshwarichivakala@gmail.com
+      if (Array.isArray(list) && list.length >= 3) {
+        if (list[2].email !== 'lokeshwarichivakala@gmail.com') {
+          list[2].name = 'Lokeshwari Chivakala';
+          list[2].email = 'lokeshwarichivakala@gmail.com';
+          list[2].role = 'Collaborator 2 (Administrator)';
+          saveAdminCollaborators(list);
+        }
+        return list;
+      }
+    } catch (e) {}
+  }
+  return DEFAULT_COLLABORATORS;
+}
+
+function saveAdminCollaborators(list) {
+  localStorage.setItem('foodfleet_collaborators', JSON.stringify(list));
+}
+
+function getAdminMasterPIN() {
+  return localStorage.getItem('foodfleet_admin_pin') || DEFAULT_ADMIN_PIN;
+}
+
+function saveAdminMasterPIN(pin) {
+  localStorage.setItem('foodfleet_admin_pin', pin);
+}
+
+function isAdminAuthorized() {
+  return sessionStorage.getItem('adminSessionActive') === 'true' ||
+         localStorage.getItem('adminSessionActive') === 'true';
+}
+
+function getActiveAdminCollaborator() {
+  const activeName = sessionStorage.getItem('adminActiveName') || localStorage.getItem('adminActiveName');
+  if (activeName) return activeName;
+  const collabs = getAdminCollaborators();
+  return collabs[0].name + ' (' + collabs[0].role + ')';
+}
+
+function setAdminSessionActive(active, memberName) {
+  if (active) {
+    sessionStorage.setItem('adminSessionActive', 'true');
+    localStorage.setItem('adminSessionActive', 'true');
+    if (memberName) {
+      sessionStorage.setItem('adminActiveName', memberName);
+      localStorage.setItem('adminActiveName', memberName);
+    }
+  } else {
+    sessionStorage.removeItem('adminSessionActive');
+    localStorage.removeItem('adminSessionActive');
+    sessionStorage.removeItem('adminActiveName');
+    localStorage.removeItem('adminActiveName');
+  }
+  updateAdminNavUI();
+}
+
+function updateAdminNavUI() {
+  const isAuth = isAdminAuthorized();
+  const desktopLink = document.getElementById('nav-admin-link');
+  const mobileLink = document.getElementById('mobile-nav-admin-link');
+  const activeNameEl = document.getElementById('admin-active-member-name');
+
+  if (desktopLink) {
+    desktopLink.style.display = isAuth ? 'inline-flex' : 'none';
+  }
+  if (mobileLink) {
+    mobileLink.style.display = isAuth ? 'block' : 'none';
+  }
+  if (activeNameEl && isAuth) {
+    activeNameEl.textContent = getActiveAdminCollaborator();
+  }
+}
+
+function openAdminAccessModal() {
+  const dialog = document.getElementById('admin-auth-dialog');
+  if (!dialog) return;
+
+  renderCollaboratorModalCards();
+
+  const pinInput = document.getElementById('admin-pin-input');
+  if (pinInput) {
+    pinInput.value = '';
+    setTimeout(() => pinInput.focus(), 150);
+  }
+
+  dialog.showModal();
+}
+
+function closeAdminAuthDialog() {
+  const dialog = document.getElementById('admin-auth-dialog');
+  if (dialog) dialog.close();
+}
+
+function renderCollaboratorModalCards() {
+  const listEl = document.getElementById('collaborator-quick-select');
+  if (!listEl) return;
+  const collabs = getAdminCollaborators();
+
+  listEl.innerHTML = collabs.map((c) => `
+    <div onclick="quickUnlockAsCollaborator('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--clr-bg-alt);border:1px solid var(--clr-surface-border);border-radius:var(--radius-md);cursor:pointer;transition:transform .15s,border-color .15s" onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateX(4px)'" onmouseout="this.style.borderColor='var(--clr-surface-border)';this.style.transform='none'">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:34px;height:34px;border-radius:var(--radius-full);background:${c.color}22;color:${c.color};font-weight:800;display:grid;place-items:center;font-size:.85rem;border:1.5px solid ${c.color}">
+          ${c.badge.split(' ')[0]}
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:.88rem;color:var(--clr-text)">${c.name}</div>
+          <div style="font-size:.75rem;color:var(--clr-text-muted)">${c.role} · ${c.email}</div>
+        </div>
+      </div>
+      <span style="font-size:.78rem;font-weight:700;color:${c.color};padding:3px 8px;border-radius:var(--radius-full);background:${c.color}15">
+        Select →
+      </span>
+    </div>
+  `).join('');
+}
+
+function quickUnlockAsCollaborator(collabId) {
+  const collabs = getAdminCollaborators();
+  const collab = collabs.find(c => c.id === collabId) || collabs[0];
+  const pinInput = document.getElementById('admin-pin-input');
+  const enteredPin = pinInput ? pinInput.value.trim() : '';
+  const masterPin = getAdminMasterPIN();
+
+  if (!enteredPin) {
+    showToast(`🔑 Please enter the 4-digit PIN above to authenticate as ${collab.name}`, 'info');
+    if (pinInput) pinInput.focus();
+    return;
+  }
+
+  if (enteredPin === masterPin) {
+    setAdminSessionActive(true, `${collab.name} (${collab.role})`);
+    closeAdminAuthDialog();
+    navigateTo('admin');
+    showToast(`👑 Welcome, ${collab.name}! Collaborator access granted.`, 'success');
+  } else {
+    showToast('❌ Invalid PIN. Please enter the correct 4-digit PIN.', 'error');
+    if (pinInput) {
+      pinInput.style.border = '2px solid #ef4444';
+      pinInput.focus();
+    }
+  }
+}
+
+function handleAdminPINUnlock(e) {
+  e.preventDefault();
+  const pinInput = document.getElementById('admin-pin-input');
+  const entered = pinInput ? pinInput.value.trim() : '';
+  const masterPin = getAdminMasterPIN();
+  const collabs = getAdminCollaborators();
+
+  if (entered === masterPin) {
+    const owner = collabs[0];
+    setAdminSessionActive(true, `${owner.name} (${owner.role})`);
+    closeAdminAuthDialog();
+    navigateTo('admin');
+    showToast(`👑 Admin unlocked! Welcome ${owner.name}.`, 'success');
+  } else {
+    showToast('❌ Incorrect PIN. Access is restricted to the 3 authorized collaborators.', 'error');
+    if (pinInput) {
+      pinInput.style.border = '2px solid #ef4444';
+      pinInput.value = '';
+      pinInput.focus();
+    }
+  }
+}
+
+function lockAdminSession() {
+  setAdminSessionActive(false);
+  navigateTo('home');
+  showToast('🔒 Admin session locked. Navigation hidden from view.', 'info');
+}
+
+function promptChangeAdminPIN() {
+  const current = getAdminMasterPIN();
+  const verify = prompt('Enter current Admin PIN:');
+  if (verify !== current) {
+    showToast('❌ Current PIN incorrect.', 'error');
+    return;
+  }
+  const newPin = prompt('Enter new 4-digit Admin PIN:');
+  if (!newPin || newPin.trim().length < 4) {
+    showToast('❌ Invalid PIN. Must be at least 4 digits.', 'error');
+    return;
+  }
+  saveAdminMasterPIN(newPin.trim());
+  showToast('✅ Admin PIN updated successfully!', 'success');
+}
+
+function renderAdminCollaboratorsList() {
+  const container = document.getElementById('admin-collaborators-list');
+  if (!container) return;
+  const collabs = getAdminCollaborators();
+
+  container.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px">
+      ${collabs.map((c, i) => `
+        <div style="background:var(--clr-bg-alt);border:1.5px solid ${c.color}35;border-radius:var(--radius-md);padding:16px;display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span style="font-size:1.1rem">${c.badge.split(' ')[0]}</span>
+              <span style="font-size:.75rem;font-weight:700;color:${c.color};background:${c.color}15;padding:2px 8px;border-radius:var(--radius-full)">${c.badge}</span>
+              <span style="font-size:.7rem;color:#22c55e;font-weight:600">● Verified</span>
+            </div>
+            <h4 style="margin:0 0 4px;font-size:1rem;color:var(--clr-text)">${c.name}</h4>
+            <p style="margin:0;font-size:.78rem;color:var(--clr-text-muted)">📧 ${c.email}</p>
+            <p style="margin:2px 0 0;font-size:.75rem;color:var(--clr-text-muted)">🛡️ Role: <strong style="color:var(--clr-text)">${c.role}</strong></p>
+          </div>
+          <button onclick="editCollaboratorMember(${i})" class="btn btn-secondary" style="font-size:.72rem;padding:4px 10px;border-radius:var(--radius-md)">
+            ✏️ Edit
+          </button>
+        </div>
+      `).join('')}
+    </div>
+    <div style="margin-top:14px;padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:var(--radius-md);font-size:.8rem;color:var(--clr-text-muted);display:flex;align-items:center;gap:8px">
+      <span style="font-size:1.1rem">🔒</span>
+      <span><strong>Privacy Guarantee:</strong> All ordinary customers only see Home, Restaurants, Menu, and Track Order. The Admin Panel is totally invisible to them.</span>
+    </div>
+  `;
+}
+
+function editCollaboratorMember(idx) {
+  const collabs = getAdminCollaborators();
+  const c = collabs[idx];
+  const newName = prompt(`Edit Collaborator ${idx + 1} Name:`, c.name);
+  if (!newName) return;
+  const newEmail = prompt(`Edit Collaborator ${idx + 1} Email:`, c.email);
+  if (!newEmail) return;
+
+  collabs[idx].name = newName.trim();
+  collabs[idx].email = newEmail.trim();
+  saveAdminCollaborators(collabs);
+  renderAdminCollaboratorsList();
+  updateAdminNavUI();
+  showToast(`✅ Updated Collaborator ${idx + 1}: ${collabs[idx].name}`, 'success');
 }
 
 // ============================================================
 // NAVIGATION — SPA page routing
 // ============================================================
 function navigateTo(page) {
+  // If navigating to admin, verify collaborator authentication
+  if (page === 'admin') {
+    if (!isAdminAuthorized()) {
+      showToast('🔒 Admin portal is private. Please enter Collaborator PIN to continue.', 'info');
+      openAdminAccessModal();
+      return;
+    }
+  }
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById(`page-${page}`);
   if (target) {
@@ -620,6 +928,11 @@ function updateCartUI() {
 
   if (totalItems > 0) { badge.style.display = 'grid'; badge.textContent = totalItems; }
   else { badge.style.display = 'none'; }
+  const bottomBadge = document.getElementById('bottom-cart-badge');
+  if (bottomBadge) {
+    if (totalItems > 0) { bottomBadge.style.display = 'grid'; bottomBadge.textContent = totalItems; }
+    else { bottomBadge.style.display = 'none'; }
+  }
   countLabel.textContent = totalItems;
 
   if (cart.length === 0) {
@@ -696,6 +1009,7 @@ function renderCheckout() {
     document.getElementById('checkout-phone').value = user.phone || '';
     document.getElementById('checkout-address').value = user.address || '';
   }
+  validatePaymentInputs();
 }
 
 let selectedPaymentMethod = 'upi'; // track currently selected payment method
@@ -704,6 +1018,7 @@ function selectPayment(el, method) {
   document.querySelectorAll('.payment-method').forEach(m => m.classList.remove('active'));
   el.classList.add('active');
   selectedPaymentMethod = method;
+
   // Show/hide relevant payment detail sections
   document.getElementById('card-details').style.display = method === 'card' ? 'block' : 'none';
   document.getElementById('upi-details').style.display = method === 'upi' ? 'block' : 'none';
@@ -711,14 +1026,65 @@ function selectPayment(el, method) {
   const cashEl = document.getElementById('cash-details');
   if (cashEl) cashEl.style.display = method === 'cash' ? 'block' : 'none';
 
+  validatePaymentInputs();
+}
+
+function validatePaymentInputs() {
   const payBtn = document.getElementById('pay-btn');
+  if (!payBtn) return;
   const totalText = document.getElementById('checkout-total')?.textContent || '₹0.00';
-  if (method === 'cash') {
-    payBtn.innerHTML = `💵 Place Order (Cash on Delivery) — <span id="pay-total">${totalText}</span>`;
+
+  if (selectedPaymentMethod === 'cash') {
+    // 💵 CASH ON DELIVERY: ENABLE IMMEDIATELY!
+    payBtn.disabled = false;
+    payBtn.style.opacity = '1';
+    payBtn.style.pointerEvents = 'auto';
+    payBtn.style.cursor = 'pointer';
     payBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-  } else {
-    payBtn.innerHTML = `🛒 Place Order — <span id="pay-total">${totalText}</span>`;
+    payBtn.innerHTML = `💵 Place Order (Cash on Delivery) — <span id="pay-total">${totalText}</span>`;
+  } else if (selectedPaymentMethod === 'upi') {
+    // 📱 UPI: ENABLE AS SOON AS UTR IS ENTERED (>= 4 chars)
+    const utr = document.getElementById('checkout-utr')?.value.trim() || '';
+    if (utr.length >= 4) {
+      payBtn.disabled = false;
+      payBtn.style.opacity = '1';
+      payBtn.style.pointerEvents = 'auto';
+      payBtn.style.cursor = 'pointer';
+      payBtn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+      payBtn.innerHTML = `✅ Place Order (UTR: ${utr}) — <span id="pay-total">${totalText}</span>`;
+    } else {
+      payBtn.disabled = true;
+      payBtn.style.opacity = '0.5';
+      payBtn.style.pointerEvents = 'none';
+      payBtn.style.cursor = 'not-allowed';
+      payBtn.style.background = 'rgba(255, 255, 255, 0.12)';
+      payBtn.innerHTML = `📱 Enter UTR to Place Order — <span id="pay-total">${totalText}</span>`;
+    }
+  } else if (selectedPaymentMethod === 'netbanking') {
+    // 🏦 NET BANKING: ENABLE AS SOON AS NTR IS ENTERED (>= 4 chars)
+    const ntr = document.getElementById('checkout-ntr')?.value.trim() || '';
+    if (ntr.length >= 4) {
+      payBtn.disabled = false;
+      payBtn.style.opacity = '1';
+      payBtn.style.pointerEvents = 'auto';
+      payBtn.style.cursor = 'pointer';
+      payBtn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+      payBtn.innerHTML = `✅ Place Order (NTR: ${ntr}) — <span id="pay-total">${totalText}</span>`;
+    } else {
+      payBtn.disabled = true;
+      payBtn.style.opacity = '0.5';
+      payBtn.style.pointerEvents = 'none';
+      payBtn.style.cursor = 'not-allowed';
+      payBtn.style.background = 'rgba(255, 255, 255, 0.12)';
+      payBtn.innerHTML = `🏦 Enter NTR to Place Order — <span id="pay-total">${totalText}</span>`;
+    }
+  } else if (selectedPaymentMethod === 'card') {
+    payBtn.disabled = false;
+    payBtn.style.opacity = '1';
+    payBtn.style.pointerEvents = 'auto';
+    payBtn.style.cursor = 'pointer';
     payBtn.style.background = '';
+    payBtn.innerHTML = `💳 Pay with Card — <span id="pay-total">${totalText}</span>`;
   }
 }
 
@@ -737,17 +1103,45 @@ function processPayment(e) {
   const tax = subtotal * 0.05;
   const total = subtotal + tax + 49;
 
-  // Payment method validation — UPI & Net Banking MUST pay first
+  // 1. Cash on Delivery — place order directly!
+  if (selectedPaymentMethod === 'cash') {
+    showToast('Placing Cash on Delivery order...', 'info');
+    setTimeout(() => {
+      placeOrder('Cash on Delivery', 'COD-' + Math.floor(100000 + Math.random() * 900000));
+    }, 500);
+    return;
+  }
+
+  // 2. UPI — If UTR is already entered on page, place order directly!
   if (selectedPaymentMethod === 'upi') {
-    showUPIPaymentDialog(total);
+    const utr = document.getElementById('checkout-utr')?.value.trim();
+    if (utr && utr.length >= 4) {
+      showToast('Processing order with UTR: ' + utr, 'info');
+      setTimeout(() => {
+        placeOrder('UPI', utr);
+      }, 500);
+    } else {
+      showUPIPaymentDialog(total);
+    }
     return;
   }
 
+  // 3. Net Banking — If NTR is already entered on page, place order directly!
   if (selectedPaymentMethod === 'netbanking') {
-    showNetBankingPaymentDialog(total);
+    const ntr = document.getElementById('checkout-ntr')?.value.trim();
+    const bankName = document.getElementById('bank-select')?.options[document.getElementById('bank-select')?.selectedIndex]?.text || 'Union Bank of India';
+    if (ntr && ntr.length >= 4) {
+      showToast('Processing order with NTR: ' + ntr, 'info');
+      setTimeout(() => {
+        placeOrder(`Net Banking — ${bankName}`, ntr);
+      }, 500);
+    } else {
+      showNetBankingPaymentDialog(total);
+    }
     return;
   }
 
+  // 4. Card
   if (selectedPaymentMethod === 'card') {
     const cardNum = document.getElementById('card-number').value.trim();
     const cardExpiry = document.getElementById('card-expiry').value.trim();
@@ -759,12 +1153,54 @@ function processPayment(e) {
     showCardPaymentDialog(total, cardNum);
     return;
   }
+}
 
-  // Cash on Delivery — confirm and place order
-  if (selectedPaymentMethod === 'cash') {
-    showCashConfirmationDialog(total, address);
-    return;
+// Live typing handler inside payment dialogs for UTR & NTR
+function onDialogPaymentInput(val) {
+  const btn = document.getElementById('place-order-btn');
+  confirmedPaymentRef = val.trim();
+
+  // Sync to checkout form inputs as well
+  if (selectedPaymentMethod === 'upi') {
+    const pageUtr = document.getElementById('checkout-utr');
+    if (pageUtr && pageUtr.value !== val) pageUtr.value = val;
+  } else if (selectedPaymentMethod === 'netbanking') {
+    const pageNtr = document.getElementById('checkout-ntr');
+    if (pageNtr && pageNtr.value !== val) pageNtr.value = val;
   }
+  validatePaymentInputs();
+
+  if (btn) {
+    if (val.trim().length >= 4) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      btn.style.cursor = 'pointer';
+      btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+    } else {
+      btn.disabled = true;
+      btn.style.opacity = '0.4';
+      btn.style.pointerEvents = 'none';
+      btn.style.cursor = 'not-allowed';
+      btn.style.background = '';
+    }
+  }
+}
+
+function openUPIModalFromCheckout() {
+  const cart = getCart();
+  if (cart.length === 0) { showToast('Your cart is empty!', 'error'); return; }
+  const subtotal = cart.reduce((sum, c) => sum + (c.price * c.qty), 0);
+  const total = subtotal + (subtotal * 0.05) + 49;
+  showUPIPaymentDialog(total);
+}
+
+function openNetBankingModalFromCheckout() {
+  const cart = getCart();
+  if (cart.length === 0) { showToast('Your cart is empty!', 'error'); return; }
+  const subtotal = cart.reduce((sum, c) => sum + (c.price * c.qty), 0);
+  const total = subtotal + (subtotal * 0.05) + 49;
+  showNetBankingPaymentDialog(total);
 }
 
 // ---- CASH ON DELIVERY CONFIRMATION ----
@@ -800,6 +1236,7 @@ function confirmCashOrder() {
 
 // ---- UPI PAYMENT: Must scan QR, pay, and enter UTR ----
 function showUPIPaymentDialog(total) {
+  const existingUtr = document.getElementById('checkout-utr')?.value.trim() || '';
   const dialog = document.getElementById('payment-confirm-dialog');
   document.getElementById('payment-confirm-body').innerHTML = `
     <div style="font-size:2.5rem;margin-bottom:8px">📱</div>
@@ -816,15 +1253,15 @@ function showUPIPaymentDialog(total) {
     </div>
     <div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.2);border-radius:var(--radius-md);padding:12px;margin-bottom:16px;text-align:left">
       <p style="font-size:.82rem;color:#ff6b35;font-weight:600">⚠️ Important:</p>
-      <p style="font-size:.82rem;color:var(--clr-text-muted)">After paying, enter your <strong>UTR / Transaction ID</strong> below and click <strong>Confirm Payment</strong>. Your order will NOT be placed without confirmation.</p>
+      <p style="font-size:.82rem;color:var(--clr-text-muted)">After paying, enter your <strong>UTR Number</strong> below. Entering UTR enables the Place Order button.</p>
     </div>
     <div id="utr-entry-section">
       <div style="text-align:left;margin-bottom:12px">
         <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:6px">UTR / Transaction Reference Number *</label>
-        <input type="text" id="payment-utr-input" class="form-control" placeholder="e.g. 412345678901 or TXN123456789" style="font-family:monospace;letter-spacing:1px" required>
-        <p style="font-size:.75rem;color:var(--clr-text-muted);margin-top:4px">You can find this in your UPI app under transaction history</p>
+        <input type="text" id="payment-utr-input" class="form-control" value="${existingUtr}" placeholder="e.g. 412345678901" style="font-family:monospace;letter-spacing:1px" oninput="onDialogPaymentInput(this.value)" onkeyup="onDialogPaymentInput(this.value)" required>
+        <p style="font-size:.75rem;color:var(--clr-text-muted);margin-top:4px">Entering 4+ digits instantly enables Place Order below</p>
       </div>
-      <button onclick="confirmUTR()" style="width:100%;padding:12px;border-radius:var(--radius-md);border:none;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;cursor:pointer;font-weight:700;font-size:.95rem;margin-bottom:12px;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='scale(1.02)';this.style.boxShadow='0 4px 16px rgba(59,130,246,.3)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none'">🔒 Confirm Payment</button>
+      <button onclick="confirmUTR()" style="width:100%;padding:12px;border-radius:var(--radius-md);border:none;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;cursor:pointer;font-weight:700;font-size:.95rem;margin-bottom:12px;transition:transform .15s,box-shadow .15s">🔒 Confirm UTR</button>
     </div>
     <div id="utr-confirmed-section" style="display:none">
       <div style="background:rgba(34,197,94,.1);border:1.5px solid rgba(34,197,94,.3);border-radius:var(--radius-md);padding:16px;margin-bottom:16px">
@@ -835,10 +1272,13 @@ function showUPIPaymentDialog(total) {
     </div>
     <div style="display:flex;gap:12px">
       <button onclick="cancelPayment()" style="flex:1;padding:12px;border-radius:var(--radius-md);border:1.5px solid var(--clr-surface-border);background:transparent;color:var(--clr-text);cursor:pointer;font-weight:600">Cancel</button>
-      <button id="place-order-btn" onclick="placeConfirmedOrder('UPI')" class="btn btn-primary" style="flex:1;padding:12px;font-size:.95rem;opacity:.4;pointer-events:none">🛒 Place Order</button>
+      <button id="place-order-btn" onclick="placeConfirmedOrder('UPI')" class="btn btn-primary" style="flex:1;padding:12px;font-size:.95rem;opacity:${existingUtr.length >= 4 ? '1' : '.4'};pointer-events:${existingUtr.length >= 4 ? 'auto' : 'none'};background:${existingUtr.length >= 4 ? 'linear-gradient(135deg,#22c55e,#16a34a)' : ''}">🛒 Place Order</button>
     </div>
   `;
   dialog.showModal();
+  if (existingUtr) {
+    onDialogPaymentInput(existingUtr);
+  }
 }
 
 // ---- NET BANKING PAYMENT: Must transfer and enter reference ----
@@ -846,6 +1286,7 @@ function showNetBankingPaymentDialog(total) {
   const bank = document.getElementById('bank-select').value;
   if (!bank) { showToast('Please select your bank first', 'error'); return; }
   const bankName = document.getElementById('bank-select').options[document.getElementById('bank-select').selectedIndex].text;
+  const existingNtr = document.getElementById('checkout-ntr')?.value.trim() || '';
 
   const dialog = document.getElementById('payment-confirm-dialog');
   document.getElementById('payment-confirm-body').innerHTML = `
@@ -868,15 +1309,15 @@ function showNetBankingPaymentDialog(total) {
     </div>
     <div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.2);border-radius:var(--radius-md);padding:12px;margin-bottom:16px;text-align:left">
       <p style="font-size:.82rem;color:#ff6b35;font-weight:600">⚠️ Important:</p>
-      <p style="font-size:.82rem;color:var(--clr-text-muted)">After completing the transfer, enter your <strong>Transaction Reference Number</strong> and click <strong>Confirm Payment</strong>.</p>
+      <p style="font-size:.82rem;color:var(--clr-text-muted)">After transfer, enter your <strong>NTR / Reference Number</strong> below. Entering NTR enables the Place Order button.</p>
     </div>
     <div id="utr-entry-section">
       <div style="text-align:left;margin-bottom:12px">
-        <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:6px">Transaction Reference Number *</label>
-        <input type="text" id="payment-utr-input" class="form-control" placeholder="e.g. NEFT/IMPS/RTGS reference number" style="font-family:monospace;letter-spacing:1px" required>
-        <p style="font-size:.75rem;color:var(--clr-text-muted);margin-top:4px">You will receive this from your bank after the transfer</p>
+        <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:6px">NTR / Transaction Reference Number *</label>
+        <input type="text" id="payment-utr-input" class="form-control" value="${existingNtr}" placeholder="e.g. UBIN123456789 or IMPS/NEFT ref" style="font-family:monospace;letter-spacing:1px" oninput="onDialogPaymentInput(this.value)" onkeyup="onDialogPaymentInput(this.value)" required>
+        <p style="font-size:.75rem;color:var(--clr-text-muted);margin-top:4px">Entering 4+ characters instantly enables Place Order below</p>
       </div>
-      <button onclick="confirmUTR()" style="width:100%;padding:12px;border-radius:var(--radius-md);border:none;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;cursor:pointer;font-weight:700;font-size:.95rem;margin-bottom:12px;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='scale(1.02)';this.style.boxShadow='0 4px 16px rgba(59,130,246,.3)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none'">🔒 Confirm Payment</button>
+      <button onclick="confirmUTR()" style="width:100%;padding:12px;border-radius:var(--radius-md);border:none;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;cursor:pointer;font-weight:700;font-size:.95rem;margin-bottom:12px;transition:transform .15s,box-shadow .15s">🔒 Confirm NTR</button>
     </div>
     <div id="utr-confirmed-section" style="display:none">
       <div style="background:rgba(34,197,94,.1);border:1.5px solid rgba(34,197,94,.3);border-radius:var(--radius-md);padding:16px;margin-bottom:16px">
@@ -887,10 +1328,13 @@ function showNetBankingPaymentDialog(total) {
     </div>
     <div style="display:flex;gap:12px">
       <button onclick="cancelPayment()" style="flex:1;padding:12px;border-radius:var(--radius-md);border:1.5px solid var(--clr-surface-border);background:transparent;color:var(--clr-text);cursor:pointer;font-weight:600">Cancel</button>
-      <button id="place-order-btn" onclick="placeConfirmedOrder('Net Banking — ${bankName}')" class="btn btn-primary" style="flex:1;padding:12px;font-size:.95rem;opacity:.4;pointer-events:none">🛒 Place Order</button>
+      <button id="place-order-btn" onclick="placeConfirmedOrder('Net Banking — ${bankName}')" class="btn btn-primary" style="flex:1;padding:12px;font-size:.95rem;opacity:${existingNtr.length >= 4 ? '1' : '.4'};pointer-events:${existingNtr.length >= 4 ? 'auto' : 'none'};background:${existingNtr.length >= 4 ? 'linear-gradient(135deg,#22c55e,#16a34a)' : ''}">🛒 Place Order</button>
     </div>
   `;
   dialog.showModal();
+  if (existingNtr) {
+    onDialogPaymentInput(existingNtr);
+  }
 }
 
 // ---- CARD PAYMENT: Simulated OTP verification ----
@@ -1089,6 +1533,11 @@ function renderAdminPanel() {
   document.getElementById('admin-menu-items').textContent = menu.length;
   document.getElementById('admin-customers').textContent = users.length;
 
+  // Collaborator portal header & list
+  renderAdminCollaboratorsList();
+  const activeNameEl = document.getElementById('admin-active-member-name');
+  if (activeNameEl) activeNameEl.textContent = getActiveAdminCollaborator();
+
   document.getElementById('admin-orders-body').innerHTML = orders.map(o => `
     <tr>
       <td><strong>${o.id}</strong></td>
@@ -1207,15 +1656,26 @@ function switchAuthTab(tab) {
 
 function handleLogin(e) {
   e.preventDefault();
-  const email = document.getElementById('login-email').value;
+  const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const users = DB.get('users') || [];
-  const user = users.find(u => u.email === email && u.password === password);
+  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
   if (user) {
     DB.set('currentUser', user);
+
+    // Check if user is one of the authorized collaborators
+    const collabs = getAdminCollaborators();
+    const isCollab = collabs.some(c => c.email.toLowerCase() === email.toLowerCase()) || user.role === 'admin';
+    if (isCollab) {
+      setAdminSessionActive(true, `${user.fname} ${user.lname || ''} (Admin)`);
+      showToast(`Welcome back, Admin ${user.fname}! 👑 Collaborator privileges active.`, 'success');
+    } else {
+      showToast(`Welcome back, ${user.fname}! 👋`, 'success');
+    }
+
     updateAuthUI();
+    updateAdminNavUI();
     closeAuthDialog();
-    showToast(`Welcome back, ${user.fname}! 👋`, 'success');
   } else {
     showToast('Invalid email or password', 'error');
   }
@@ -1242,8 +1702,18 @@ function handleSignup(e) {
   DB.set('users', users);
   DB.set('currentUser', newUser);
   updateAuthUI();
+  updateAdminNavUI();
   closeAuthDialog();
   showToast(`Welcome to FoodFleet, ${newUser.fname}! 🎉`, 'success');
+}
+
+function handleUserLogout() {
+  DB.set('currentUser', null);
+  setAdminSessionActive(false);
+  updateAuthUI();
+  updateAdminNavUI();
+  navigateTo('home');
+  showToast('Logged out successfully', 'info');
 }
 
 function updateAuthUI() {
@@ -1251,11 +1721,13 @@ function updateAuthUI() {
   const authButtons = document.getElementById('auth-buttons');
   const userArea = document.getElementById('user-area');
   if (user) {
-    authButtons.style.display = 'none'; userArea.style.display = 'flex';
-    document.getElementById('user-avatar').textContent = (user.fname[0] + user.lname[0]).toUpperCase();
-    document.getElementById('user-display-name').textContent = user.fname;
+    authButtons.style.display = 'none';
+    userArea.style.display = 'flex';
+    document.getElementById('user-avatar').textContent = (user.fname[0] + (user.lname ? user.lname[0] : '')).toUpperCase();
+    document.getElementById('user-display-name').innerHTML = `${user.fname} <span style="font-size:.72rem;color:var(--clr-text-muted);cursor:pointer;margin-left:4px" onclick="handleUserLogout()" title="Log Out">✕</span>`;
   } else {
-    authButtons.style.display = 'flex'; userArea.style.display = 'none';
+    authButtons.style.display = 'flex';
+    userArea.style.display = 'none';
   }
 }
 
@@ -1284,5 +1756,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderMenuItems();
   updateCartUI();
   updateAuthUI();
+  updateAdminNavUI();
   trackOrder();
 });
