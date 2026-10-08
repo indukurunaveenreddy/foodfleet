@@ -171,18 +171,18 @@
         <!-- Rendered dynamically by JS -->
       </div>
 
-      <!-- PIN Input Area — Appears upon clicking a collaborator profile -->
-      <div id="collaborator-pin-section" style="display:none;background:var(--clr-bg-alt);border:1.5px solid rgba(245,158,11,0.45);border-radius:var(--radius-md);padding:16px;text-align:left;margin-top:12px">
+      <!-- PIN Input Area — ALWAYS VISIBLE -->
+      <div id="collaborator-pin-section" style="background:var(--clr-bg-alt);border:1.5px solid rgba(245,158,11,0.45);border-radius:var(--radius-md);padding:16px;text-align:left;margin-top:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="font-size:.85rem;font-weight:700;color:var(--clr-text);display:flex;align-items:center;gap:6px">
             <span id="pin-selected-badge" style="font-size:1.1rem">👑</span>
-            <span>Enter PIN for <strong id="pin-selected-name" style="color:#f59e0b">Collaborator</strong></span>
+            <span>Logging in as: <strong id="pin-selected-name" style="color:#f59e0b">Indukuru Naveen Reddy</strong></span>
           </div>
-          <button type="button" onclick="cancelCollaboratorSelect()" style="background:none;border:none;color:var(--clr-text-muted);font-size:.75rem;cursor:pointer;text-decoration:underline">Change</button>
+          <span style="font-size:.72rem;color:var(--clr-text-muted)">(Click profile above to switch)</span>
         </div>
 
         <form id="admin-pin-form" onsubmit="handleAdminPINUnlock(event)">
-          <label for="admin-pin-input" style="display:block;font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--clr-text-muted)">
+          <label for="admin-pin-input" style="display:block;font-size:.82rem;font-weight:700;margin-bottom:6px;color:var(--clr-text)">
             🔑 Enter 4-Digit Security PIN:
           </label>
           <div style="display:flex;gap:10px;margin-bottom:8px">
@@ -192,7 +192,7 @@
             </button>
           </div>
           <p style="font-size:.74rem;color:var(--clr-text-muted);margin:0">
-            🔒 Confidential Master PIN shared with Co-owners.
+            🔒 Enter your private 4-digit master PIN shared between co-owners.
           </p>
         </form>
       </div>
@@ -275,7 +275,7 @@
             </div>
           </div>
           <div class="hero-image">
-            <img src="hero-burger.jpg" alt="Delicious gourmet burger" width="600" height="375">
+            <img src="images/hero-burger.jpg" alt="Delicious gourmet burger" width="600" height="375">
             <div class="float-card delivery">
               <div class="float-card-icon green">🚴</div>
               <div>
@@ -667,18 +667,32 @@
         </div>
 
         <!-- Orders table -->
+        <!-- Orders table with Live Cloud Sync -->
         <div class="admin-table-wrap" style="margin-bottom:30px">
-          <div class="admin-table-header">
-            <h3>📋 Recent Orders</h3>
+          <div class="admin-table-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <h3 style="margin:0">📋 Live Customer Orders</h3>
+              <span id="cloud-sync-status-badge" style="display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:var(--radius-full);background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)">
+                <span style="width:7px;height:7px;border-radius:50%;background:#10b981"></span>
+                <span>Live Cloud Sync: Active</span>
+              </span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="cloud-last-sync-time" style="font-size:.75rem;color:var(--clr-text-muted)">Synced just now</span>
+              <button type="button" class="btn btn-secondary" onclick="manualSyncCloudOrders()" style="padding:6px 14px;font-size:.8rem;display:inline-flex;align-items:center;gap:6px">
+                <span id="cloud-sync-btn-icon">🔄</span> Sync Live Orders
+              </button>
+            </div>
           </div>
           <div style="overflow-x:auto">
             <table>
               <thead>
                 <tr>
                   <th>Order ID</th>
-                  <th>Customer</th>
-                  <th>Items</th>
-                  <th>Total</th>
+                  <th>Customer & Contact</th>
+                  <th>📍 Delivery Location</th>
+                  <th>Items Ordered</th>
+                  <th>Amount & Payment</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -774,7 +788,7 @@
                     PhonePe / Google Pay / Paytm</p>
                   <div
                     style="background:#fff;border-radius:var(--radius-lg);padding:16px;display:inline-block;box-shadow:0 4px 20px rgba(0,0,0,.3)">
-                    <img src="phonepe-qr.jpg" alt="PhonePe QR Code — INDUKURU MANVITHA"
+                    <img src="images/phonepe-qr.jpg" alt="PhonePe QR Code — INDUKURU MANVITHA"
                       style="width:220px;height:auto;border-radius:8px">
                   </div>
                   <p style="margin-top:12px;font-weight:600;color:var(--clr-text);font-size:.95rem">INDUKURU MANVITHA

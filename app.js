@@ -20,6 +20,157 @@ const DB = {
 };
 
 // ============================================================
+// GLOBAL CLOUD DATABASE & LIVE ORDERS SYNC
+// Real-time bidirectional synchronization for Admin across all locations
+// ============================================================
+const CLOUD_SYNC_ENDPOINT = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1183d045d1a00';
+let cloudSyncPollingInterval = null;
+let lastKnownCloudOrderCount = 0;
+
+async function fetchOrdersFromCloud() {
+  try {
+    const res = await fetch(CLOUD_SYNC_ENDPOINT, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json && json.data && Array.isArray(json.data.orders)) {
+      return json.data.orders;
+    }
+  } catch (err) {
+    console.warn('Cloud orders fetch warning:', err);
+  }
+  return null;
+}
+
+async function pushOrdersToCloud(ordersList) {
+  try {
+    const payload = {
+      name: 'FoodFleet_Global_Orders_V1',
+      data: {
+        orders: ordersList,
+        lastUpdated: new Date().toISOString()
+      }
+    };
+    const res = await fetch(CLOUD_SYNC_ENDPOINT, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('Cloud orders push warning:', err);
+    return false;
+  }
+}
+
+function playOrderChime() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.12); // A5
+    gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.45);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.45);
+  } catch (e) {}
+}
+
+async function syncOrdersWithCloud(autoSilent = false) {
+  const localOrders = DB.get('orders') || [];
+  const cloudOrders = await fetchOrdersFromCloud();
+
+  if (!cloudOrders) {
+    updateCloudSyncBadge(false);
+    return localOrders;
+  }
+
+  // Merge map by order ID
+  const map = new Map();
+  // Cloud orders first
+  cloudOrders.forEach(o => {
+    if (o && o.id) map.set(o.id, o);
+  });
+  // Local orders overlay
+  localOrders.forEach(o => {
+    if (o && o.id) {
+      if (!map.has(o.id)) {
+        map.set(o.id, o);
+      } else {
+        const existing = map.get(o.id);
+        if (o.status && o.status !== existing.status) {
+          existing.status = o.status;
+        }
+      }
+    }
+  });
+
+  const merged = Array.from(map.values());
+  merged.sort((a, b) => {
+    const tA = a.timestamp || new Date(a.date || 0).getTime();
+    const tB = b.timestamp || new Date(b.date || 0).getTime();
+    return tB - tA;
+  });
+
+  if (merged.length > lastKnownCloudOrderCount && lastKnownCloudOrderCount > 0 && autoSilent) {
+    const diff = merged.length - lastKnownCloudOrderCount;
+    showToast(`🔔 ${diff} New Customer Order(s) Received from Live Site!`, 'success');
+    playOrderChime();
+  }
+  lastKnownCloudOrderCount = merged.length;
+
+  DB.set('orders', merged);
+
+  if (merged.length > cloudOrders.length) {
+    pushOrdersToCloud(merged);
+  }
+
+  updateCloudSyncBadge(true);
+  return merged;
+}
+
+function updateCloudSyncBadge(isLive) {
+  const badge = document.getElementById('cloud-sync-status-badge');
+  const timeEl = document.getElementById('cloud-last-sync-time');
+  if (badge) {
+    if (isLive) {
+      badge.innerHTML = '<span class="live-pulse-dot" style="width:7px;height:7px;border-radius:50%;background:#10b981"></span><span>Live Cloud Sync: Connected</span>';
+      badge.style.color = '#10b981';
+      badge.style.background = 'rgba(16,185,129,0.15)';
+      badge.style.borderColor = 'rgba(16,185,129,0.3)';
+    } else {
+      badge.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#f59e0b"></span><span>Cloud Sync: Offline/Cached</span>';
+      badge.style.color = '#f59e0b';
+      badge.style.background = 'rgba(245,158,11,0.15)';
+      badge.style.borderColor = 'rgba(245,158,11,0.3)';
+    }
+  }
+  if (timeEl) {
+    timeEl.textContent = 'Synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+}
+
+async function manualSyncCloudOrders() {
+  const icon = document.getElementById('cloud-sync-btn-icon');
+  if (icon) {
+    icon.style.display = 'inline-block';
+    icon.style.animation = 'spin 1s linear infinite';
+  }
+  showToast('🔄 Syncing all live customer orders from Cloud Database...', 'info');
+
+  const orders = await syncOrdersWithCloud(false);
+  if (icon) icon.style.animation = 'none';
+
+  renderAdminOrdersTableOnly();
+  showToast(`✅ Cloud Orders Synced! ${orders.length} order(s) live.`, 'success');
+}
+
+// ============================================================
 // CURRENCY — Indian Rupees
 // ============================================================
 const CURRENCY = '₹';
@@ -31,18 +182,18 @@ function formatPrice(amount) {
 // IMAGE MAP — maps category to the food images we have
 // ============================================================
 const IMAGE_MAP = {
-  burger:   'hero-burger.jpg',
-  pizza:    'pizza.jpg',
-  sushi:    'sushi.jpg',
-  pasta:    'pasta.jpg',
-  tacos:    'tacos.jpg',
-  salad:    'salad.jpg',
-  dessert:  'pasta.jpg',
-  icecream: 'icecream.jpg',
-  drinks:   'drinks.jpg',
-  biryani:  'biryani.jpg',
-  chinese:  'chinese.jpg',
-  sandwich: 'hero-burger.jpg',
+  burger:   'images/hero-burger.jpg',
+  pizza:    'images/pizza.jpg',
+  sushi:    'images/sushi.jpg',
+  pasta:    'images/pasta.jpg',
+  tacos:    'images/tacos.jpg',
+  salad:    'images/salad.jpg',
+  dessert:  'images/pasta.jpg',
+  icecream: 'images/icecream.jpg',
+  drinks:   'images/drinks.jpg',
+  biryani:  'images/biryani.jpg',
+  chinese:  'images/chinese.jpg',
+  sandwich: 'images/hero-burger.jpg',
 };
 
 // ============================================================
@@ -566,18 +717,32 @@ function openAdminAccessModal() {
   const dialog = document.getElementById('admin-auth-dialog');
   if (!dialog) return;
 
-  selectedCollaboratorForUnlock = null;
+  const collabs = getAdminCollaborators();
+  if (!selectedCollaboratorForUnlock) {
+    selectedCollaboratorForUnlock = collabs[0].id;
+  }
+  const activeCollab = collabs.find(c => c.id === selectedCollaboratorForUnlock) || collabs[0];
+
   const pinSection = document.getElementById('collaborator-pin-section');
-  if (pinSection) pinSection.style.display = 'none';
+  if (pinSection) pinSection.style.display = 'block';
+
+  const nameEl = document.getElementById('pin-selected-name');
+  const badgeEl = document.getElementById('pin-selected-badge');
+  if (nameEl) nameEl.textContent = activeCollab.name;
+  if (badgeEl) badgeEl.textContent = activeCollab.badge.split(' ')[0];
 
   const pinInput = document.getElementById('admin-pin-input');
   if (pinInput) {
     pinInput.value = '';
-    pinInput.style.border = '';
+    pinInput.style.border = '1.5px solid rgba(245,158,11,0.5)';
   }
 
   renderCollaboratorModalCards();
   dialog.showModal();
+
+  if (pinInput) {
+    setTimeout(() => pinInput.focus(), 150);
+  }
 }
 
 function closeAdminAuthDialog() {
@@ -589,6 +754,9 @@ function renderCollaboratorModalCards() {
   const listEl = document.getElementById('collaborator-quick-select');
   if (!listEl) return;
   const collabs = getAdminCollaborators();
+  if (!selectedCollaboratorForUnlock) {
+    selectedCollaboratorForUnlock = collabs[0].id;
+  }
 
   listEl.innerHTML = collabs.map((c) => {
     const isSelected = selectedCollaboratorForUnlock === c.id;
@@ -596,23 +764,23 @@ function renderCollaboratorModalCards() {
     <div onclick="selectCollaboratorForPIN('${c.id}')" 
          role="button"
          tabindex="0"
-         style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:${isSelected ? 'rgba(245,158,11,0.12)' : 'var(--clr-bg-alt)'};border:2px solid ${isSelected ? '#f59e0b' : 'var(--clr-surface-border)'};border-radius:var(--radius-md);cursor:pointer;transition:all .18s ease;box-shadow:${isSelected ? '0 0 14px rgba(245,158,11,0.3)' : 'none'}" 
+         style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:${isSelected ? 'rgba(245,158,11,0.15)' : 'var(--clr-bg-alt)'};border:2px solid ${isSelected ? '#f59e0b' : 'var(--clr-surface-border)'};border-radius:var(--radius-md);cursor:pointer;transition:all .18s ease;box-shadow:${isSelected ? '0 0 16px rgba(245,158,11,0.35)' : 'none'}" 
          onmouseover="if('${selectedCollaboratorForUnlock}' !== '${c.id}') { this.style.borderColor='${c.color}';this.style.transform='translateX(4px)'; }" 
          onmouseout="if('${selectedCollaboratorForUnlock}' !== '${c.id}') { this.style.borderColor='var(--clr-surface-border)';this.style.transform='none'; }">
       <div style="display:flex;align-items:center;gap:12px">
-        <div style="width:38px;height:38px;border-radius:var(--radius-full);background:${c.color}25;color:${c.color};font-weight:800;display:grid;place-items:center;font-size:.95rem;border:2px solid ${c.color}">
+        <div style="width:40px;height:40px;border-radius:var(--radius-full);background:${c.color}25;color:${c.color};font-weight:800;display:grid;place-items:center;font-size:.95rem;border:2px solid ${c.color}">
           ${c.badge.split(' ')[0]}
         </div>
         <div>
           <div style="font-weight:700;font-size:.92rem;color:var(--clr-text);display:flex;align-items:center;gap:6px">
             ${c.name}
-            ${isSelected ? '<span style="font-size:.7rem;background:#f59e0b;color:#000;font-weight:800;padding:1px 6px;border-radius:4px">SELECTED</span>' : ''}
+            ${isSelected ? '<span style="font-size:.68rem;background:#f59e0b;color:#000;font-weight:800;padding:2px 7px;border-radius:4px">SELECTED</span>' : ''}
           </div>
           <div style="font-size:.75rem;color:var(--clr-text-muted)">${c.role} · ${c.email}</div>
         </div>
       </div>
-      <div style="font-size:.8rem;font-weight:700;color:${c.color};padding:5px 12px;border-radius:var(--radius-full);background:${c.color}18;display:flex;align-items:center;gap:4px">
-        ${isSelected ? '🔑 Enter PIN' : 'Click to Enter PIN →'}
+      <div style="font-size:.8rem;font-weight:700;color:${isSelected ? '#f59e0b' : c.color};padding:6px 14px;border-radius:var(--radius-full);background:${isSelected ? 'rgba(245,158,11,0.22)' : c.color + '18'};display:flex;align-items:center;gap:4px">
+        ${isSelected ? '✓ Selected' : 'Select →'}
       </div>
     </div>
   `;
@@ -636,20 +804,17 @@ function selectCollaboratorForPIN(collabId) {
 
   if (pinSection) {
     pinSection.style.display = 'block';
-    pinSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   if (pinInput) {
-    pinInput.value = '';
-    pinInput.style.border = '1.5px solid #f59e0b';
-    setTimeout(() => pinInput.focus(), 100);
+    pinInput.style.border = '2px solid #f59e0b';
+    pinInput.focus();
   }
 }
 
 function cancelCollaboratorSelect() {
-  selectedCollaboratorForUnlock = null;
-  const pinSection = document.getElementById('collaborator-pin-section');
-  if (pinSection) pinSection.style.display = 'none';
+  const collabs = getAdminCollaborators();
+  selectedCollaboratorForUnlock = collabs[0].id;
   renderCollaboratorModalCards();
 }
 
@@ -758,6 +923,11 @@ function navigateTo(page) {
       openAdminAccessModal();
       return;
     }
+  }
+
+  if (page !== 'admin' && cloudSyncPollingInterval) {
+    clearInterval(cloudSyncPollingInterval);
+    cloudSyncPollingInterval = null;
   }
 
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1496,10 +1666,18 @@ function placeOrder(paymentMethod, paymentRef) {
   const total = subtotal + tax + 49;
 
   const orders = DB.get('orders') || [];
-  const orderId = `ORD-${String(orders.length + 1).padStart(3, '0')}`;
+  const orderId = `ORD-${Date.now().toString().slice(-4)}`;
+  const custName = document.getElementById('checkout-name')?.value.trim() || 'Customer';
+  const custPhone = document.getElementById('checkout-phone')?.value.trim() || '';
+  const custAddress = document.getElementById('checkout-address')?.value.trim() || 'Standard Delivery';
+  const custNotes = document.getElementById('checkout-notes')?.value.trim() || '';
+
   const newOrder = {
     id: orderId,
-    customer: document.getElementById('checkout-name').value,
+    customer: custName,
+    phone: custPhone,
+    address: custAddress,
+    notes: custNotes,
     email: DB.get('currentUser')?.email || 'guest@example.com',
     items: cart.map(c => `${c.name} x${c.qty}`),
     total: total,
@@ -1507,7 +1685,8 @@ function placeOrder(paymentMethod, paymentRef) {
     paymentRef: paymentRef || '',
     status: 'pending',
     date: new Date().toISOString().slice(0, 10),
-    address: document.getElementById('checkout-address').value,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    timestamp: Date.now(),
     timeline: [
       { step: 'Order Placed', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), done: true, active: true },
       { step: 'Confirmed by Restaurant', time: '', done: false },
@@ -1516,10 +1695,13 @@ function placeOrder(paymentMethod, paymentRef) {
       { step: 'Delivered', time: '', done: false },
     ]
   };
-  orders.push(newOrder);
+  orders.unshift(newOrder);
   DB.set('orders', orders);
   DB.set('cart', []);
   updateCartUI();
+
+  // Instant Cloud Broadcast so Admin anywhere in the world sees it in real-time
+  pushOrdersToCloud(orders);
 
   showToast(`Order ${orderId} placed successfully! 🎉 (Paid via ${paymentMethod})`, 'success');
   setTimeout(() => {
@@ -1532,10 +1714,23 @@ function placeOrder(paymentMethod, paymentRef) {
 // ============================================================
 // ORDER TRACKING
 // ============================================================
-function trackOrder() {
+async function trackOrder() {
   const orderId = document.getElementById('track-order-id').value.trim().toUpperCase();
-  const orders = DB.get('orders') || [];
-  const order = orders.find(o => o.id === orderId);
+  let orders = DB.get('orders') || [];
+  let order = orders.find(o => o.id === orderId);
+
+  // If order not yet cached locally, fetch from cloud!
+  if (!order && orderId) {
+    const cloudOrders = await fetchOrdersFromCloud();
+    if (cloudOrders) {
+      order = cloudOrders.find(o => o.id === orderId);
+      if (order) {
+        orders.unshift(order);
+        DB.set('orders', orders);
+      }
+    }
+  }
+
   const container = document.getElementById('tracking-result');
 
   if (!order) {
@@ -1552,7 +1747,7 @@ function trackOrder() {
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px">
       <div>
         <h3 style="font-size:1.3rem">${order.id}</h3>
-        <p style="font-size:.88rem;color:var(--clr-text-muted)">${order.customer} · ${order.date}</p>
+        <p style="font-size:.88rem;color:var(--clr-text-muted)">${order.customer} · ${order.date} ${order.time || ''}</p>
       </div>
       <span class="status-pill ${order.status}">${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span>
     </div>
@@ -1560,6 +1755,7 @@ function trackOrder() {
       <p style="font-size:.88rem;color:var(--clr-text-muted);margin-bottom:6px">📦 Items:</p>
       <p style="font-weight:500">${order.items.join(', ')}</p>
       <p style="margin-top:10px;font-size:.88rem;color:var(--clr-text-muted)">📍 Delivery: ${order.address}</p>
+      ${order.phone ? `<p style="margin-top:4px;font-size:.88rem;color:var(--clr-text-muted)">📞 Phone: ${order.phone}</p>` : ''}
       <p style="margin-top:6px;font-size:.88rem;color:var(--clr-text-muted)">💵 Payment: <strong style="color:var(--clr-text)">${order.paymentMethod || 'Cash on Delivery'}</strong> ${order.paymentRef ? `<span style="font-family:monospace">(${order.paymentRef})</span>` : ''}</p>
       <p style="margin-top:6px;font-weight:700;color:var(--clr-primary)">Total: ${formatPrice(order.total)}</p>
     </div>
@@ -1576,35 +1772,105 @@ function trackOrder() {
 }
 
 // ============================================================
-// ADMIN PANEL
+// ADMIN PANEL — LIVE CLOUD ORDERS & MANAGEMENT
 // ============================================================
-function renderAdminPanel() {
+function renderAdminOrdersTableOnly() {
   const orders = DB.get('orders') || [];
+  const tbody = document.getElementById('admin-orders-body');
+  if (!tbody) return;
+
+  const totalEl = document.getElementById('admin-total-orders');
+  if (totalEl) totalEl.textContent = orders.length;
+
+  const revenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const revEl = document.getElementById('admin-revenue');
+  if (revEl) revEl.textContent = formatPrice(revenue);
+
+  if (orders.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--clr-text-muted)">No orders placed yet. Live orders will appear here automatically!</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = orders.map(o => `
+    <tr>
+      <td>
+        <strong style="color:var(--clr-primary);font-size:.9rem">${o.id}</strong>
+        <div style="font-size:.73rem;color:var(--clr-text-muted);margin-top:2px">${o.date || ''} ${o.time || ''}</div>
+      </td>
+      <td>
+        <div style="font-weight:700;color:var(--clr-text);font-size:.88rem">${o.customer || 'Customer'}</div>
+        ${o.phone ? `
+          <div style="font-size:.78rem;display:flex;align-items:center;gap:6px;margin-top:3px">
+            <a href="tel:${o.phone}" style="color:#10b981;text-decoration:none;font-weight:600" title="Call Customer">📞 ${o.phone}</a>
+            <a href="https://wa.me/91${o.phone.replace(/[^0-9]/g, '')}?text=Hello%20${encodeURIComponent(o.customer || '')},%20regarding%20your%20FoodFleet%20Order%20${o.id}" target="_blank" style="color:#25d366;text-decoration:none;font-size:.75rem;font-weight:700" title="Chat on WhatsApp">💬 WA</a>
+          </div>
+        ` : '<span style="font-size:.75rem;color:var(--clr-text-muted)">No phone</span>'}
+      </td>
+      <td style="max-width:240px">
+        <div style="font-size:.82rem;color:var(--clr-text);line-height:1.35;word-break:break-word">${o.address || 'Standard Delivery'}</div>
+        ${o.notes ? `<div style="font-size:.72rem;color:#f59e0b;margin-top:2px">Note: ${o.notes}</div>` : ''}
+        ${o.address ? `
+          <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:.73rem;color:#3b82f6;text-decoration:none;margin-top:4px;font-weight:600;background:#3b82f615;padding:2px 8px;border-radius:4px">
+            📍 View Location Map ↗
+          </a>
+        ` : ''}
+      </td>
+      <td style="max-width:180px">
+        <div style="font-size:.8rem;font-weight:600;line-height:1.3">${Array.isArray(o.items) ? o.items.join(', ') : o.items}</div>
+      </td>
+      <td>
+        <div style="font-weight:800;color:var(--clr-text);font-size:.9rem">${formatPrice(o.total || 0)}</div>
+        <div style="font-size:.72rem;margin-top:3px">
+          <span style="background:${o.paymentMethod === 'Cash on Delivery' ? 'rgba(245,158,11,0.18)' : 'rgba(16,185,129,0.18)'};color:${o.paymentMethod === 'Cash on Delivery' ? '#f59e0b' : '#10b981'};padding:2px 7px;border-radius:4px;font-weight:700">
+            ${o.paymentMethod || 'Online'}
+          </span>
+          ${o.paymentRef ? `<div style="font-size:.68rem;font-family:monospace;color:var(--clr-text-muted);margin-top:2px">Ref: ${o.paymentRef}</div>` : ''}
+        </div>
+      </td>
+      <td>
+        <span class="status-pill ${o.status}">${o.status.charAt(0).toUpperCase() + o.status.slice(1)}</span>
+      </td>
+      <td>
+        <button class="action-btn edit" onclick="updateOrderStatus('${o.id}')" style="padding:6px 12px;font-size:.78rem">Update Status</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderAdminPanel() {
   const menu = DB.get('menu') || [];
   const users = DB.get('users') || [];
 
-  document.getElementById('admin-total-orders').textContent = orders.length;
-  const revenue = orders.reduce((sum, o) => sum + o.total, 0);
-  document.getElementById('admin-revenue').textContent = formatPrice(revenue);
   document.getElementById('admin-menu-items').textContent = menu.length;
   document.getElementById('admin-customers').textContent = users.length;
 
-  // Collaborator portal header & list
   renderAdminCollaboratorsList();
   const activeNameEl = document.getElementById('admin-active-member-name');
   if (activeNameEl) activeNameEl.textContent = getActiveAdminCollaborator();
 
-  document.getElementById('admin-orders-body').innerHTML = orders.map(o => `
-    <tr>
-      <td><strong>${o.id}</strong></td>
-      <td>${o.customer}</td>
-      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.items.join(', ')}</td>
-      <td>${formatPrice(o.total)}</td>
-      <td><span class="status-pill ${o.status}">${o.status.charAt(0).toUpperCase() + o.status.slice(1)}</span></td>
-      <td><button class="action-btn edit" onclick="updateOrderStatus('${o.id}')">Update</button></td>
-    </tr>
-  `).join('');
+  // Instant render with local cache
+  renderAdminOrdersTableOnly();
 
+  // Fetch live orders from global cloud database
+  syncOrdersWithCloud(false).then(() => {
+    renderAdminOrdersTableOnly();
+  });
+
+  // Start real-time live polling every 8s while Admin view is active
+  if (cloudSyncPollingInterval) clearInterval(cloudSyncPollingInterval);
+  cloudSyncPollingInterval = setInterval(() => {
+    const adminPage = document.getElementById('page-admin');
+    if (adminPage && adminPage.classList.contains('active')) {
+      syncOrdersWithCloud(true).then(() => {
+        renderAdminOrdersTableOnly();
+      });
+    } else {
+      clearInterval(cloudSyncPollingInterval);
+      cloudSyncPollingInterval = null;
+    }
+  }, 8000);
+
+  // Render menu items
   document.getElementById('admin-menu-body').innerHTML = menu.map(m => `
     <tr>
       <td><strong>${m.name}</strong></td>
@@ -1645,7 +1911,7 @@ function deleteMenuItem(itemId) {
   renderAdminPanel();
 }
 
-function updateOrderStatus(orderId) {
+async function updateOrderStatus(orderId) {
   const orders = DB.get('orders') || [];
   const order = orders.find(o => o.id === orderId);
   if (!order) return;
@@ -1656,34 +1922,34 @@ function updateOrderStatus(orderId) {
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     // Clear all active flags first
-    order.timeline.forEach(t => t.active = false);
-    
-    if (order.status === 'preparing') {
-      // Step 1 (Confirmed) done, Step 2 (Preparing) active
-      order.timeline[1].done = true;
-      order.timeline[1].time = now;
-      order.timeline[2].active = true;
-    } else if (order.status === 'out_for_delivery') {
-      // Steps 1-2 done, Step 3 (Out for Delivery) active
-      order.timeline[1].done = true;
-      order.timeline[2].done = true;
-      order.timeline[2].time = now;
-      order.timeline[3].active = true;
-    } else if (order.status === 'delivered') {
-      // ALL steps done — fully completed
-      order.timeline.forEach((t, i) => {
-        t.done = true;
-        t.active = false;
-        if (!t.time) t.time = now;
-      });
-      // Mark last step specially
-      order.timeline[4].time = now;
+    if (order.timeline) {
+      order.timeline.forEach(t => t.active = false);
+      if (order.status === 'preparing') {
+        order.timeline[1].done = true;
+        order.timeline[1].time = now;
+        order.timeline[2].active = true;
+      } else if (order.status === 'out_for_delivery') {
+        order.timeline[1].done = true;
+        order.timeline[2].done = true;
+        order.timeline[2].time = now;
+        order.timeline[3].active = true;
+      } else if (order.status === 'delivered') {
+        order.timeline.forEach(t => {
+          t.done = true;
+          t.active = false;
+          if (!t.time) t.time = now;
+        });
+        order.timeline[4].time = now;
+      }
     }
     
     DB.set('orders', orders);
+    // Push updated status immediately to cloud so customer on tracking page also sees it
+    pushOrdersToCloud(orders);
+
     const displayStatus = order.status === 'out_for_delivery' ? 'Out for Delivery' : order.status.charAt(0).toUpperCase() + order.status.slice(1);
     showToast(`Order ${orderId} updated to: ${displayStatus}`, 'success');
-    renderAdminPanel();
+    renderAdminOrdersTableOnly();
   } else {
     showToast(`Order ${orderId} is already delivered`, 'info');
   }
