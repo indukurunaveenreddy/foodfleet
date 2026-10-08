@@ -20,15 +20,19 @@ const DB = {
 };
 
 // ============================================================
-// GLOBAL CLOUD DATABASE & LIVE ORDERS SYNC
-// Real-time bidirectional multi-endpoint synchronization across all devices
+// GLOBAL REAL-TIME CLOUD DATABASE & LIVE ORDERS SYNC
+// Real-time bidirectional synchronization with SSE Stream + Cloud Polling
+// 100% unrestricted CORS, zero API limits, instant global delivery
 // ============================================================
-const CLOUD_SYNC_ENDPOINTS = [
+const NTFY_SYNC_TOPIC = 'indukuru_foodfleet_orders_snapshot';
+const NTFY_EVENT_TOPIC = 'indukuru_foodfleet_orders_feed';
+const BACKUP_SYNC_ENDPOINTS = [
   'https://extendsclass.com/api/json-storage/bin/acefdce',
   'https://extendsclass.com/api/json-storage/bin/febbafe'
 ];
 let cloudSyncPollingInterval = null;
 let lastKnownCloudOrderCount = 0;
+let ntfyEventSource = null;
 
 // Universal non-destructive order merge function
 function mergeOrderLists(...lists) {
@@ -70,12 +74,73 @@ function mergeOrderLists(...lists) {
   return merged;
 }
 
-// Fetch orders from primary or fallback cloud endpoints
+// Real-time Server-Sent Events (SSE) Listener for Admin & Collaborators
+function initRealtimeOrderStream() {
+  if (ntfyEventSource) return;
+  try {
+    ntfyEventSource = new EventSource(`https://ntfy.sh/${NTFY_EVENT_TOPIC}/sse`);
+    ntfyEventSource.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg && msg.message) {
+          const payload = JSON.parse(msg.message);
+          if (payload && payload.orders && Array.isArray(payload.orders)) {
+            const local = DB.get('orders') || [];
+            const merged = mergeOrderLists(payload.orders, local);
+            DB.set('orders', merged);
+            renderAdminOrdersTableOnly();
+            updateCloudSyncBadge(true, merged.length);
+            playOrderChime();
+            showToast('🔔 New Live Order Received from Customer!', 'success');
+          }
+        }
+      } catch (err) {
+        console.warn('Realtime message parse warning:', err);
+      }
+    };
+    ntfyEventSource.onerror = () => {
+      // Reconnects automatically
+    };
+  } catch (e) {
+    console.warn('EventSource not supported:', e);
+  }
+}
+
+// Fetch orders from NTFY snapshot or backup cloud endpoints
 async function fetchOrdersFromCloud() {
-  for (const endpoint of CLOUD_SYNC_ENDPOINTS) {
+  // 1. Primary: NTFY Snapshot (100% CORS from all browsers, mobile and desktop)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(`https://ntfy.sh/${NTFY_SYNC_TOPIC}/json?poll=1`, {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const text = await res.text();
+      const lines = text.trim().split('\n');
+      for (const line of lines) {
+        try {
+          const item = JSON.parse(line);
+          if (item && item.message) {
+            const parsed = JSON.parse(item.message);
+            if (parsed && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+              return parsed.orders;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (err) {
+    console.warn('NTFY snapshot fetch warning:', err);
+  }
+
+  // 2. Secondary: Backup endpoints
+  for (const endpoint of BACKUP_SYNC_ENDPOINTS) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(endpoint, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
@@ -88,13 +153,13 @@ async function fetchOrdersFromCloud() {
         return json.orders;
       }
     } catch (err) {
-      // try backup endpoint
+      // try next
     }
   }
   return null;
 }
 
-// Push orders to primary and backup cloud endpoints
+// Push orders to NTFY real-time hub and backup cloud endpoints
 async function pushOrdersToCloud(ordersList) {
   if (!Array.isArray(ordersList)) return false;
   const payload = JSON.stringify({
@@ -103,27 +168,35 @@ async function pushOrdersToCloud(ordersList) {
   });
 
   let success = false;
-  // Push to all endpoints
-  const pushPromises = CLOUD_SYNC_ENDPOINTS.map(async (endpoint) => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(endpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) success = true;
-    } catch (err) {
-      console.warn('Cloud orders push warning for', endpoint, err);
-    }
+
+  // 1. Instant Real-Time Push to NTFY (Unrestricted CORS across all domains/devices)
+  try {
+    const res1 = await fetch(`https://ntfy.sh/${NTFY_SYNC_TOPIC}`, {
+      method: 'POST',
+      body: payload
+    });
+    if (res1.ok) success = true;
+
+    // Trigger instant push alert to all connected admin/collaborator tabs
+    fetch(`https://ntfy.sh/${NTFY_EVENT_TOPIC}`, {
+      method: 'POST',
+      headers: { 'Title': 'FoodFleet Live Order', 'Tags': 'bell,package' },
+      body: payload
+    }).catch(() => {});
+  } catch (err) {
+    console.warn('NTFY push warning:', err);
+  }
+
+  // 2. Backup endpoint push (async background)
+  BACKUP_SYNC_ENDPOINTS.forEach(endpoint => {
+    fetch(endpoint, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    }).catch(() => {});
   });
 
-  await Promise.allSettled(pushPromises);
-
-  // Cross-tab broadcast for immediate synchronization on same origin
+  // 3. Cross-tab broadcast for immediate synchronization on same origin
   if (typeof BroadcastChannel !== 'undefined') {
     try {
       const bc = new BroadcastChannel('foodfleet_orders_sync');
@@ -438,18 +511,18 @@ function formatPrice(amount) {
 // IMAGE MAP — maps category to the food images we have
 // ============================================================
 const IMAGE_MAP = {
-  burger:   'hero-burger.jpg',
-  pizza:    'pizza.jpg',
-  sushi:    'sushi.jpg',
-  pasta:    'pasta.jpg',
-  tacos:    'tacos.jpg',
-  salad:    'salad.jpg',
-  dessert:  'pasta.jpg',
-  icecream: 'icecream.jpg',
-  drinks:   'drinks.jpg',
-  biryani:  'biryani.jpg',
-  chinese:  'chinese.jpg',
-  sandwich: 'hero-burger.jpg',
+  burger:   'images/hero-burger.jpg',
+  pizza:    'images/pizza.jpg',
+  sushi:    'images/sushi.jpg',
+  pasta:    'images/pasta.jpg',
+  tacos:    'images/tacos.jpg',
+  salad:    'images/salad.jpg',
+  dessert:  'images/pasta.jpg',
+  icecream: 'images/icecream.jpg',
+  drinks:   'images/drinks.jpg',
+  biryani:  'images/biryani.jpg',
+  chinese:  'images/chinese.jpg',
+  sandwich: 'images/hero-burger.jpg',
 };
 
 // ============================================================
@@ -761,30 +834,145 @@ const SEED_MENU = [
 ];
 
 // ============================================================
-// SEED ORDERS (prices in ₹)
+// SEED ORDERS (Live Customer Orders Cache)
 // ============================================================
 const SEED_ORDERS = [
-  { id: 'ORD-001', customer: 'Rahul Sharma', email: 'rahul@example.com', items: ['Hyderabadi Chicken Biryani x2', 'Butter Chicken'], total: 897, status: 'preparing', date: '2026-10-07', address: '123 MG Road, Hyderabad', timeline: [
-    { step: 'Order Placed', time: '8:00 PM', done: true },
-    { step: 'Confirmed by Restaurant', time: '8:02 PM', done: true },
-    { step: 'Preparing Your Food', time: '8:05 PM', done: true, active: true },
-    { step: 'Out for Delivery', time: '', done: false },
-    { step: 'Delivered', time: '', done: false },
-  ]},
-  { id: 'ORD-002', customer: 'Priya Patel', email: 'priya@example.com', items: ['Margherita Pizza', 'Tiramisu'], total: 478, status: 'delivered', date: '2026-10-06', address: '456 Banjara Hills, Hyderabad', timeline: [
-    { step: 'Order Placed', time: '6:30 PM', done: true },
-    { step: 'Confirmed by Restaurant', time: '6:32 PM', done: true },
-    { step: 'Preparing Your Food', time: '6:35 PM', done: true },
-    { step: 'Out for Delivery', time: '7:00 PM', done: true },
-    { step: 'Delivered', time: '7:22 PM', done: true },
-  ]},
-  { id: 'ORD-003', customer: 'Ankit Verma', email: 'ankit@example.com', items: ['Dragon Roll', 'Salmon Nigiri Set', 'Mango Lassi'], total: 1047, status: 'pending', date: '2026-10-07', address: '789 Jubilee Hills, Hyderabad', timeline: [
-    { step: 'Order Placed', time: '8:30 PM', done: true },
-    { step: 'Confirmed by Restaurant', time: '', done: false, active: true },
-    { step: 'Preparing Your Food', time: '', done: false },
-    { step: 'Out for Delivery', time: '', done: false },
-    { step: 'Delivered', time: '', done: false },
-  ]},
+  {
+    id: 'ORD-1883',
+    customer: 'sai reddy',
+    phone: '8639866865',
+    address: 'Cheemasandra, Chimasandra, Bangalore East, Bengaluru Urban, Karnataka, 560049, India',
+    lat: 13.0489,
+    lng: 77.7388,
+    accuracy: 140,
+    mapsUrl: 'https://www.google.com/maps?q=13.0489,77.7388',
+    notes: '',
+    items: ['Indukuru Chicken Biryani x4'],
+    total: 1304.80,
+    paymentMethod: 'Cash on Delivery',
+    paymentRef: 'COD-180662',
+    status: 'delivered',
+    date: '2026-10-08',
+    time: '12:05',
+    timestamp: 1791440700000,
+    timeline: [
+      { step: 'Order Placed', time: '12:05 PM', done: true },
+      { step: 'Confirmed by Restaurant', time: '12:08 PM', done: true },
+      { step: 'Preparing Your Food', time: '12:12 PM', done: true },
+      { step: 'Out for Delivery', time: '12:25 PM', done: true },
+      { step: 'Delivered', time: '12:40 PM', done: true }
+    ]
+  },
+  {
+    id: 'ORD-9825',
+    customer: 'yathish reddy',
+    phone: '91 8639866865',
+    address: 'madanapalle',
+    notes: '',
+    items: ['Indukuru Special Thali x5'],
+    total: 1356.25,
+    paymentMethod: 'Cash on Delivery',
+    paymentRef: 'COD-977845',
+    status: 'delivered',
+    date: '2026-10-08',
+    time: '11:28',
+    timestamp: 1791438480000,
+    timeline: [
+      { step: 'Order Placed', time: '11:28 AM', done: true },
+      { step: 'Confirmed by Restaurant', time: '11:30 AM', done: true },
+      { step: 'Preparing Your Food', time: '11:35 AM', done: true },
+      { step: 'Out for Delivery', time: '11:50 AM', done: true },
+      { step: 'Delivered', time: '12:10 PM', done: true }
+    ]
+  },
+  {
+    id: 'ORD-001',
+    customer: 'Indukuru Naveen Reddy',
+    phone: '8639866865',
+    address: 'Indukuru Family Dhaba, Main Road',
+    notes: '',
+    items: ['Special Chicken Biryani x2'],
+    total: 780.00,
+    paymentMethod: 'Cash on Delivery',
+    paymentRef: '',
+    status: 'delivered',
+    date: '2026-10-08',
+    time: '02:50 AM',
+    timestamp: 1791408100000,
+    timeline: [
+      { step: 'Order Placed', time: '02:50 AM', done: true },
+      { step: 'Confirmed by Restaurant', time: '02:52 AM', done: true },
+      { step: 'Preparing Your Food', time: '02:55 AM', done: true },
+      { step: 'Out for Delivery', time: '03:10 AM', done: true },
+      { step: 'Delivered', time: '03:25 AM', done: true }
+    ]
+  },
+  {
+    id: 'ORD-004',
+    customer: 'dvvv',
+    phone: '',
+    address: 'rfeg',
+    notes: '',
+    items: ['Pepperoni Supreme x5'],
+    total: 1881.25,
+    paymentMethod: 'Cash on Delivery',
+    paymentRef: 'COD-815630',
+    status: 'delivered',
+    date: '2026-10-07',
+    time: '10:15',
+    timestamp: 1791347700000,
+    timeline: [
+      { step: 'Order Placed', time: '10:15 AM', done: true },
+      { step: 'Confirmed by Restaurant', time: '10:20 AM', done: true },
+      { step: 'Preparing Your Food', time: '10:25 AM', done: true },
+      { step: 'Out for Delivery', time: '10:45 AM', done: true },
+      { step: 'Delivered', time: '11:05 AM', done: true }
+    ]
+  },
+  {
+    id: 'ORD-003',
+    customer: 'Ankit Verma',
+    phone: '',
+    address: '789 Jubilee Hills, Hyderabad',
+    notes: '',
+    items: ['Dragon Roll', 'Salmon Nigiri Set', 'Mango Lassi'],
+    total: 1047.00,
+    paymentMethod: 'Online',
+    paymentRef: '',
+    status: 'delivered',
+    date: '2026-10-07',
+    time: '08:30 PM',
+    timestamp: 1791341400000,
+    timeline: [
+      { step: 'Order Placed', time: '08:30 PM', done: true },
+      { step: 'Confirmed by Restaurant', time: '08:32 PM', done: true },
+      { step: 'Preparing Your Food', time: '08:35 PM', done: true },
+      { step: 'Out for Delivery', time: '08:50 PM', done: true },
+      { step: 'Delivered', time: '09:12 PM', done: true }
+    ]
+  },
+  {
+    id: 'ORD-002',
+    customer: 'Priya Patel',
+    phone: '',
+    address: '456 Banjara Hills, Hyderabad',
+    notes: '',
+    items: ['Margherita Pizza', 'Tiramisu'],
+    total: 478.00,
+    paymentMethod: 'Online',
+    paymentRef: '',
+    status: 'delivered',
+    date: '2026-10-06',
+    time: '06:30 PM',
+    timestamp: 1791255000000,
+    timeline: [
+      { step: 'Order Placed', time: '06:30 PM', done: true },
+      { step: 'Confirmed by Restaurant', time: '06:32 PM', done: true },
+      { step: 'Preparing Your Food', time: '06:35 PM', done: true },
+      { step: 'Out for Delivery', time: '07:00 PM', done: true },
+      { step: 'Delivered', time: '07:22 PM', done: true }
+    ]
+  }
 ];
 
 // ============================================================
@@ -794,14 +982,18 @@ function initializeData() {
   // Always reset to get updated menu & prices
   DB.set('restaurants', SEED_RESTAURANTS);
   DB.set('menu', SEED_MENU);
-  if (!DB.get('orders')) DB.set('orders', SEED_ORDERS);
 
-  // Pre-seed collaborator users if not present
+  // Auto-merge cached orders with seed orders so all devices immediately have full orders list
+  const existingOrders = DB.get('orders') || [];
+  const mergedOrders = mergeOrderLists(existingOrders, SEED_ORDERS);
+  DB.set('orders', mergedOrders);
+
+  // Pre-seed collaborator users including indukurun@gmail.com
   const users = DB.get('users') || [];
-  if (!users.some(u => u.email === 'naveen@indukuru.com')) {
+  if (!users.some(u => u.email === 'indukurun@gmail.com' || u.email === 'naveen@indukuru.com')) {
     users.push({
-      id: 'u_admin_1', fname: 'Naveen', lname: 'Reddy', email: 'naveen@indukuru.com',
-      password: 'admin', role: 'admin', phone: '8639866865', address: 'Indukuru Dhaba, Hyderabad'
+      id: 'u_admin_1', fname: 'Naveen', lname: 'Reddy', email: 'indukurun@gmail.com',
+      password: 'admin', role: 'admin', phone: '8639866865', address: 'Indukuru Family Dhaba'
     });
   }
   if (!users.some(u => u.email === 'manvitha@indukuru.com')) {
@@ -830,7 +1022,7 @@ const DEFAULT_COLLABORATORS = [
     id: 'collab_1',
     name: 'Indukuru Naveen Reddy',
     role: 'Owner & Super Admin',
-    email: 'naveen@indukuru.com',
+    email: 'indukurun@gmail.com',
     badge: '👑 Owner',
     phone: '8639866865',
     color: '#f59e0b',
@@ -2140,6 +2332,9 @@ function renderAdminPanel() {
   renderAdminCollaboratorsList();
   const activeNameEl = document.getElementById('admin-active-member-name');
   if (activeNameEl) activeNameEl.textContent = getActiveAdminCollaborator();
+
+  // Initialize zero-latency real-time SSE stream for instant order notifications
+  initRealtimeOrderStream();
 
   // Instant render with local cache
   renderAdminOrdersTableOnly();
