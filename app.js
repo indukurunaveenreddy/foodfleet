@@ -21,48 +21,134 @@ const DB = {
 
 // ============================================================
 // GLOBAL CLOUD DATABASE & LIVE ORDERS SYNC
-// Real-time bidirectional synchronization for Admin across all locations
+// Real-time bidirectional multi-endpoint synchronization across all devices
 // ============================================================
-const CLOUD_SYNC_ENDPOINT = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1183d045d1a00';
+const CLOUD_SYNC_ENDPOINTS = [
+  'https://extendsclass.com/api/json-storage/bin/acefdce',
+  'https://extendsclass.com/api/json-storage/bin/febbafe'
+];
 let cloudSyncPollingInterval = null;
 let lastKnownCloudOrderCount = 0;
 
-async function fetchOrdersFromCloud() {
-  try {
-    const res = await fetch(CLOUD_SYNC_ENDPOINT, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if (json && json.data && Array.isArray(json.data.orders)) {
-      return json.data.orders;
+// Universal non-destructive order merge function
+function mergeOrderLists(...lists) {
+  const map = new Map();
+  lists.forEach(list => {
+    if (Array.isArray(list)) {
+      list.forEach(o => {
+        if (!o || !o.id) return;
+        if (!map.has(o.id)) {
+          map.set(o.id, { ...o });
+        } else {
+          const cur = map.get(o.id);
+          // Preserve higher / advanced status progression
+          const statusRank = { 'pending': 1, 'confirmed': 2, 'preparing': 3, 'out_for_delivery': 4, 'delivered': 5 };
+          const curRank = statusRank[cur.status] || 0;
+          const oRank = statusRank[o.status] || 0;
+          if (oRank > curRank) {
+            cur.status = o.status;
+            if (o.timeline) cur.timeline = o.timeline;
+          }
+          // Merge missing properties (GPS lat, lng, phone, address, notes)
+          if ((cur.lat === undefined || cur.lat === null) && o.lat !== undefined && o.lat !== null) cur.lat = o.lat;
+          if ((cur.lng === undefined || cur.lng === null) && o.lng !== undefined && o.lng !== null) cur.lng = o.lng;
+          if (!cur.accuracy && o.accuracy) cur.accuracy = o.accuracy;
+          if (!cur.phone && o.phone) cur.phone = o.phone;
+          if (!cur.notes && o.notes) cur.notes = o.notes;
+          if ((!cur.address || cur.address === 'Standard Delivery') && o.address) cur.address = o.address;
+        }
+      });
     }
-  } catch (err) {
-    console.warn('Cloud orders fetch warning:', err);
+  });
+
+  const merged = Array.from(map.values());
+  merged.sort((a, b) => {
+    const tA = a.timestamp || (a.date ? new Date(a.date).getTime() : 0);
+    const tB = b.timestamp || (b.date ? new Date(b.date).getTime() : 0);
+    return tB - tA;
+  });
+  return merged;
+}
+
+// Fetch orders from primary or fallback cloud endpoints
+async function fetchOrdersFromCloud() {
+  for (const endpoint of CLOUD_SYNC_ENDPOINTS) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) continue;
+      const json = await res.json();
+      if (json && Array.isArray(json.orders)) {
+        return json.orders;
+      }
+    } catch (err) {
+      // try backup endpoint
+    }
   }
   return null;
 }
 
+// Push orders to primary and backup cloud endpoints
 async function pushOrdersToCloud(ordersList) {
+  if (!Array.isArray(ordersList)) return false;
+  const payload = JSON.stringify({
+    orders: ordersList,
+    lastUpdated: new Date().toISOString()
+  });
+
+  let success = false;
+  // Push to all endpoints
+  const pushPromises = CLOUD_SYNC_ENDPOINTS.map(async (endpoint) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) success = true;
+    } catch (err) {
+      console.warn('Cloud orders push warning for', endpoint, err);
+    }
+  });
+
+  await Promise.allSettled(pushPromises);
+
+  // Cross-tab broadcast for immediate synchronization on same origin
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const bc = new BroadcastChannel('foodfleet_orders_sync');
+      bc.postMessage({ type: 'SYNC_ORDERS', orders: ordersList });
+    } catch (e) {}
+  }
+  return success;
+}
+
+// Listen for cross-tab order broadcasts
+if (typeof BroadcastChannel !== 'undefined') {
   try {
-    const payload = {
-      name: 'FoodFleet_Global_Orders_V1',
-      data: {
-        orders: ordersList,
-        lastUpdated: new Date().toISOString()
+    const bc = new BroadcastChannel('foodfleet_orders_sync');
+    bc.onmessage = (event) => {
+      if (event.data && event.data.type === 'SYNC_ORDERS' && Array.isArray(event.data.orders)) {
+        const local = DB.get('orders') || [];
+        const merged = mergeOrderLists(event.data.orders, local);
+        DB.set('orders', merged);
+        const adminPage = document.getElementById('page-admin');
+        if (adminPage && adminPage.classList.contains('active')) {
+          renderAdminOrdersTableOnly();
+        }
       }
     };
-    const res = await fetch(CLOUD_SYNC_ENDPOINT, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('Cloud orders push warning:', err);
-    return false;
-  }
+  } catch (e) {}
 }
 
 function playOrderChime() {
@@ -86,36 +172,12 @@ async function syncOrdersWithCloud(autoSilent = false) {
   const cloudOrders = await fetchOrdersFromCloud();
 
   if (!cloudOrders) {
-    updateCloudSyncBadge(false);
+    updateCloudSyncBadge(false, localOrders.length);
     return localOrders;
   }
 
-  // Merge map by order ID
-  const map = new Map();
-  // Cloud orders first
-  cloudOrders.forEach(o => {
-    if (o && o.id) map.set(o.id, o);
-  });
-  // Local orders overlay
-  localOrders.forEach(o => {
-    if (o && o.id) {
-      if (!map.has(o.id)) {
-        map.set(o.id, o);
-      } else {
-        const existing = map.get(o.id);
-        if (o.status && o.status !== existing.status) {
-          existing.status = o.status;
-        }
-      }
-    }
-  });
-
-  const merged = Array.from(map.values());
-  merged.sort((a, b) => {
-    const tA = a.timestamp || new Date(a.date || 0).getTime();
-    const tB = b.timestamp || new Date(b.date || 0).getTime();
-    return tB - tA;
-  });
+  // Merge both lists non-destructively
+  const merged = mergeOrderLists(cloudOrders, localOrders);
 
   if (merged.length > lastKnownCloudOrderCount && lastKnownCloudOrderCount > 0 && autoSilent) {
     const diff = merged.length - lastKnownCloudOrderCount;
@@ -126,25 +188,27 @@ async function syncOrdersWithCloud(autoSilent = false) {
 
   DB.set('orders', merged);
 
+  // If local had orders that were missing in cloud, push merged back up
   if (merged.length > cloudOrders.length) {
     pushOrdersToCloud(merged);
   }
 
-  updateCloudSyncBadge(true);
+  updateCloudSyncBadge(true, merged.length);
   return merged;
 }
 
-function updateCloudSyncBadge(isLive) {
+function updateCloudSyncBadge(isLive, orderCount) {
   const badge = document.getElementById('cloud-sync-status-badge');
   const timeEl = document.getElementById('cloud-last-sync-time');
+  const countStr = typeof orderCount === 'number' ? ` (${orderCount} Orders)` : '';
   if (badge) {
     if (isLive) {
-      badge.innerHTML = '<span class="live-pulse-dot" style="width:7px;height:7px;border-radius:50%;background:#10b981"></span><span>Live Cloud Sync: Connected</span>';
+      badge.innerHTML = `<span class="live-pulse-dot" style="width:7px;height:7px;border-radius:50%;background:#10b981"></span><span>Live Cloud Sync: Connected${countStr}</span>`;
       badge.style.color = '#10b981';
       badge.style.background = 'rgba(16,185,129,0.15)';
       badge.style.borderColor = 'rgba(16,185,129,0.3)';
     } else {
-      badge.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#f59e0b"></span><span>Cloud Sync: Offline/Cached</span>';
+      badge.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:#f59e0b"></span><span>Cloud Sync: Offline/Cached${countStr}</span>`;
       badge.style.color = '#f59e0b';
       badge.style.background = 'rgba(245,158,11,0.15)';
       badge.style.borderColor = 'rgba(245,158,11,0.3)';
@@ -168,6 +232,198 @@ async function manualSyncCloudOrders() {
 
   renderAdminOrdersTableOnly();
   showToast(`✅ Cloud Orders Synced! ${orders.length} order(s) live.`, 'success');
+}
+
+// ============================================================
+// GEOLOCATION & DELIVERY LOCATION DETECTION
+// Pinpoint GPS coordinate capture & OpenStreetMap Geocoding
+// ============================================================
+async function detectUserLiveLocation() {
+  const btn = document.getElementById('detect-gps-btn');
+  const icon = document.getElementById('gps-btn-icon');
+  const text = document.getElementById('gps-btn-text');
+  const addrInput = document.getElementById('checkout-address');
+  const statusBox = document.getElementById('gps-status-box');
+  const coordsText = document.getElementById('gps-coords-text');
+  const previewLink = document.getElementById('gps-preview-link');
+  const latInput = document.getElementById('checkout-lat');
+  const lngInput = document.getElementById('checkout-lng');
+  const accInput = document.getElementById('checkout-accuracy');
+
+  if (!navigator.geolocation) {
+    showToast('Geolocation is not supported by your browser', 'error');
+    return;
+  }
+
+  if (icon) icon.textContent = '⏳';
+  if (text) text.textContent = 'Detecting exact GPS...';
+  if (btn) btn.disabled = true;
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const accuracy = Math.round(pos.coords.accuracy || 10);
+
+      if (latInput) latInput.value = lat;
+      if (lngInput) lngInput.value = lng;
+      if (accInput) accInput.value = accuracy;
+
+      // Reverse geocode with OpenStreetMap Nominatim
+      let readableAddress = '';
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.display_name) {
+            readableAddress = data.display_name;
+          }
+        }
+      } catch (e) {
+        console.warn('Reverse geocoding warning:', e);
+      }
+
+      if (!readableAddress) {
+        readableAddress = `GPS Location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      }
+
+      if (addrInput) {
+        addrInput.value = readableAddress;
+        addrInput.focus();
+      }
+
+      if (statusBox && coordsText && previewLink) {
+        statusBox.style.display = 'flex';
+        coordsText.textContent = `Live GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} (±${accuracy}m accuracy)`;
+        previewLink.href = `https://www.google.com/maps?q=${lat},${lng}`;
+      }
+
+      if (icon) icon.textContent = '✅';
+      if (text) text.textContent = 'GPS Captured!';
+      if (btn) btn.disabled = false;
+      showToast('📍 Exact GPS location detected successfully!', 'success');
+    },
+    (err) => {
+      if (icon) icon.textContent = '📍';
+      if (text) text.textContent = 'Use Current Live Location';
+      if (btn) btn.disabled = false;
+      let msg = 'Unable to fetch location. Please type your delivery address manually.';
+      if (err.code === 1) msg = 'Location access was denied. Please allow permission or type your address manually.';
+      else if (err.code === 2) msg = 'Position unavailable. Please type your address manually.';
+      else if (err.code === 3) msg = 'Location request timed out. Please try again.';
+      showToast(msg, 'error');
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+}
+
+function openOrderLocationMapModal(orderId) {
+  const dialog = document.getElementById('order-location-map-dialog');
+  if (!dialog) return;
+
+  const orders = DB.get('orders') || [];
+  const order = orders.find(o => o.id === orderId);
+  if (!order) {
+    showToast('Order not found', 'error');
+    return;
+  }
+
+  const titleEl = document.getElementById('order-map-modal-title');
+  const subEl = document.getElementById('order-map-modal-subtitle');
+  const mapContainer = document.getElementById('order-map-embed-container');
+  const detailsContainer = document.getElementById('order-map-details-container');
+
+  if (titleEl) {
+    titleEl.innerHTML = `<span>📍</span> Delivery Location — <span style="color:var(--clr-primary)">${order.id}</span>`;
+  }
+  if (subEl) {
+    subEl.textContent = `Customer: ${order.customer || 'Customer'} · ${order.date || ''} ${order.time || ''}`;
+  }
+
+  const hasGps = (typeof order.lat === 'number' && typeof order.lng === 'number' && !isNaN(order.lat) && !isNaN(order.lng));
+  const lat = hasGps ? order.lat : null;
+  const lng = hasGps ? order.lng : null;
+  const address = order.address || 'Standard Delivery';
+
+  if (mapContainer) {
+    if (hasGps) {
+      // Interactive OpenStreetMap iframe centered exactly on latitude and longitude
+      const bboxDelta = 0.006;
+      const minLng = lng - bboxDelta;
+      const maxLng = lng + bboxDelta;
+      const minLat = lat - bboxDelta * 0.7;
+      const maxLat = lat + bboxDelta * 0.7;
+      const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${minLng}%2C${minLat}%2C${maxLng}%2C${maxLat}&layer=mapnik&marker=${lat}%2C${lng}`;
+      mapContainer.innerHTML = `<iframe class="order-map-frame" src="${osmUrl}" loading="lazy" style="border:none;width:100%;height:100%"></iframe>`;
+    } else {
+      // Fallback search map embed with address query
+      const encodedAddr = encodeURIComponent(address);
+      const embedUrl = `https://maps.google.com/maps?q=${encodedAddr}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+      mapContainer.innerHTML = `<iframe class="order-map-frame" src="${embedUrl}" loading="lazy" style="border:none;width:100%;height:100%"></iframe>`;
+    }
+  }
+
+  if (detailsContainer) {
+    const gmapsLink = hasGps
+      ? `https://www.google.com/maps?q=${lat},${lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+
+    const riderMsg = encodeURIComponent(
+      `🚴 *FoodFleet Delivery Order ${order.id}*\n` +
+      `👤 Customer: ${order.customer || 'Customer'}\n` +
+      `📞 Phone: ${order.phone || 'N/A'}\n` +
+      `📍 Delivery Address: ${address}\n` +
+      (hasGps ? `🛰️ GPS Pin: ${gmapsLink}\n` : `🗺️ Map: ${gmapsLink}\n`) +
+      `💰 Amount: ${formatPrice(order.total || 0)} (${order.paymentMethod || 'COD'})\n` +
+      `🍽️ Items: ${Array.isArray(order.items) ? order.items.join(', ') : order.items}`
+    );
+
+    detailsContainer.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;color:var(--clr-text);font-size:.92rem;margin-bottom:4px">
+            📍 Delivery Address:
+          </div>
+          <div style="color:var(--clr-text-muted);line-height:1.4">${address}</div>
+          ${order.notes ? `<div style="font-size:.78rem;color:#f59e0b;margin-top:4px"><strong>Note:</strong> ${order.notes}</div>` : ''}
+          ${hasGps ? `
+            <div style="margin-top:8px">
+              <span class="gps-badge-pill">
+                🛰️ Exact Coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)} ${order.accuracy ? `(±${order.accuracy}m)` : ''}
+              </span>
+            </div>
+          ` : `
+            <div style="margin-top:8px;font-size:.75rem;color:var(--clr-text-muted)">
+              ℹ️ Address entered manually by customer
+            </div>
+          `}
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <a href="${gmapsLink}" target="_blank" class="btn btn-primary" style="padding:7px 16px;font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+          🚗 Open in Google Maps ↗
+        </a>
+        <a href="https://wa.me/?text=${riderMsg}" target="_blank" class="btn btn-secondary" style="padding:7px 16px;font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px;color:#25d366;border-color:rgba(37,211,102,0.3)">
+          💬 Share Location with Rider (WhatsApp)
+        </a>
+        ${order.phone ? `
+          <a href="tel:${order.phone}" class="btn btn-secondary" style="padding:7px 16px;font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px;color:#10b981;border-color:rgba(16,185,129,0.3)">
+            📞 Call Customer
+          </a>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  dialog.showModal();
+}
+
+function closeOrderLocationMapModal() {
+  const dialog = document.getElementById('order-location-map-dialog');
+  if (dialog) dialog.close();
 }
 
 // ============================================================
@@ -1659,24 +1915,35 @@ function cancelPayment() {
   showToast('Payment cancelled — order not placed', 'info');
 }
 
-function placeOrder(paymentMethod, paymentRef) {
+async function placeOrder(paymentMethod, paymentRef) {
   const cart = getCart();
   const subtotal = cart.reduce((sum, c) => sum + (c.price * c.qty), 0);
   const tax = subtotal * 0.05;
   const total = subtotal + tax + 49;
 
-  const orders = DB.get('orders') || [];
   const orderId = `ORD-${Date.now().toString().slice(-4)}`;
   const custName = document.getElementById('checkout-name')?.value.trim() || 'Customer';
   const custPhone = document.getElementById('checkout-phone')?.value.trim() || '';
   const custAddress = document.getElementById('checkout-address')?.value.trim() || 'Standard Delivery';
   const custNotes = document.getElementById('checkout-notes')?.value.trim() || '';
+  const rawLat = document.getElementById('checkout-lat')?.value;
+  const rawLng = document.getElementById('checkout-lng')?.value;
+  const rawAcc = document.getElementById('checkout-accuracy')?.value;
+  const latVal = (rawLat && !isNaN(parseFloat(rawLat))) ? parseFloat(rawLat) : null;
+  const lngVal = (rawLng && !isNaN(parseFloat(rawLng))) ? parseFloat(rawLng) : null;
+  const accVal = (rawAcc && !isNaN(parseFloat(rawAcc))) ? parseFloat(rawAcc) : null;
 
   const newOrder = {
     id: orderId,
     customer: custName,
     phone: custPhone,
     address: custAddress,
+    lat: latVal,
+    lng: lngVal,
+    accuracy: accVal,
+    mapsUrl: (latVal !== null && lngVal !== null)
+      ? `https://www.google.com/maps?q=${latVal},${lngVal}`
+      : (custAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(custAddress)}` : ''),
     notes: custNotes,
     email: DB.get('currentUser')?.email || 'guest@example.com',
     items: cart.map(c => `${c.name} x${c.qty}`),
@@ -1695,13 +1962,18 @@ function placeOrder(paymentMethod, paymentRef) {
       { step: 'Delivered', time: '', done: false },
     ]
   };
-  orders.unshift(newOrder);
-  DB.set('orders', orders);
+
+  // Safe non-destructive merge: Fetch current cloud orders first so no order is ever lost
+  const cloudOrders = await fetchOrdersFromCloud();
+  const localOrders = DB.get('orders') || [];
+  const mergedOrders = mergeOrderLists([newOrder], localOrders, cloudOrders || []);
+
+  DB.set('orders', mergedOrders);
   DB.set('cart', []);
   updateCartUI();
 
-  // Instant Cloud Broadcast so Admin anywhere in the world sees it in real-time
-  pushOrdersToCloud(orders);
+  // Instant Cloud Broadcast to all endpoints so Admin anywhere in the world sees it in real-time
+  pushOrdersToCloud(mergedOrders);
 
   showToast(`Order ${orderId} placed successfully! 🎉 (Paid via ${paymentMethod})`, 'success');
   setTimeout(() => {
@@ -1806,14 +2078,35 @@ function renderAdminOrdersTableOnly() {
           </div>
         ` : '<span style="font-size:.75rem;color:var(--clr-text-muted)">No phone</span>'}
       </td>
-      <td style="max-width:240px">
-        <div style="font-size:.82rem;color:var(--clr-text);line-height:1.35;word-break:break-word">${o.address || 'Standard Delivery'}</div>
-        ${o.notes ? `<div style="font-size:.72rem;color:#f59e0b;margin-top:2px">Note: ${o.notes}</div>` : ''}
-        ${o.address ? `
-          <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:.73rem;color:#3b82f6;text-decoration:none;margin-top:4px;font-weight:600;background:#3b82f615;padding:2px 8px;border-radius:4px">
-            📍 View Location Map ↗
-          </a>
-        ` : ''}
+      <td style="max-width:260px">
+        <div style="font-size:.84rem;font-weight:600;color:var(--clr-text);line-height:1.35;word-break:break-word">
+          ${o.address || 'Standard Delivery'}
+        </div>
+        ${o.notes ? `<div style="font-size:.73rem;color:#f59e0b;margin-top:2px"><strong>Note:</strong> ${o.notes}</div>` : ''}
+        ${(typeof o.lat === 'number' && typeof o.lng === 'number' && !isNaN(o.lat) && !isNaN(o.lng)) ? `
+          <div style="margin-top:4px">
+            <span class="gps-badge-pill" title="Exact GPS coordinates">
+              🛰️ ${o.lat.toFixed(4)}, ${o.lng.toFixed(4)} ${o.accuracy ? `(±${o.accuracy}m)` : ''}
+            </span>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+              <button type="button" onclick="openOrderLocationMapModal('${o.id}')" class="map-view-btn">
+                🗺️ View Live Map
+              </button>
+              <a href="https://www.google.com/maps?q=${o.lat},${o.lng}" target="_blank" style="font-size:.73rem;color:#10b981;text-decoration:none;font-weight:700" title="Open Google Maps with GPS Pin">
+                📍 GMaps ↗
+              </a>
+            </div>
+          </div>
+        ` : (o.address ? `
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+            <button type="button" onclick="openOrderLocationMapModal('${o.id}')" class="map-view-btn">
+              🗺️ View Map
+            </button>
+            <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}" target="_blank" style="font-size:.73rem;color:#3b82f6;text-decoration:none;font-weight:700" title="Search on Google Maps">
+              📍 GMaps ↗
+            </a>
+          </div>
+        ` : '')}
       </td>
       <td style="max-width:180px">
         <div style="font-size:.8rem;font-weight:600;line-height:1.3">${Array.isArray(o.items) ? o.items.join(', ') : o.items}</div>
@@ -1856,7 +2149,7 @@ function renderAdminPanel() {
     renderAdminOrdersTableOnly();
   });
 
-  // Start real-time live polling every 8s while Admin view is active
+  // Start real-time live polling every 5s while Admin view is active
   if (cloudSyncPollingInterval) clearInterval(cloudSyncPollingInterval);
   cloudSyncPollingInterval = setInterval(() => {
     const adminPage = document.getElementById('page-admin');
@@ -1868,7 +2161,7 @@ function renderAdminPanel() {
       clearInterval(cloudSyncPollingInterval);
       cloudSyncPollingInterval = null;
     }
-  }, 8000);
+  }, 5000);
 
   // Render menu items
   document.getElementById('admin-menu-body').innerHTML = menu.map(m => `

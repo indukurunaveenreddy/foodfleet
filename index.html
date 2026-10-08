@@ -751,14 +751,31 @@
                 </div>
               </div>
               <div class="form-group">
-                <label for="checkout-address">Delivery Address</label>
-                <input type="text" id="checkout-address" class="form-control"
-                  placeholder="123 MG Road, Hyderabad, Telangana" required>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+                  <label for="checkout-address" style="margin:0;font-weight:600">Delivery Address</label>
+                  <button type="button" id="detect-gps-btn" onclick="detectUserLiveLocation()" class="gps-detect-btn" title="Auto-detect current GPS location">
+                    <span id="gps-btn-icon">📍</span> <span id="gps-btn-text">Use Current Live Location</span>
+                  </button>
+                </div>
+                <div style="position:relative">
+                  <input type="text" id="checkout-address" class="form-control"
+                    placeholder="e.g. House No, Street, Landmark, City (or click 'Use Current Live Location')" required>
+                  <input type="hidden" id="checkout-lat" value="">
+                  <input type="hidden" id="checkout-lng" value="">
+                  <input type="hidden" id="checkout-accuracy" value="">
+                </div>
+                <div id="gps-status-box" style="display:none;margin-top:8px;padding:8px 12px;border-radius:var(--radius-md);font-size:.78rem;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#10b981;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span>🛰️</span>
+                    <span id="gps-coords-text">Exact GPS coordinates captured</span>
+                  </div>
+                  <a id="gps-preview-link" href="#" target="_blank" style="color:#3b82f6;text-decoration:none;font-weight:600">View Pin on Google Maps ↗</a>
+                </div>
               </div>
               <div class="form-group">
                 <label for="checkout-notes">Delivery Notes (Optional)</label>
                 <input type="text" id="checkout-notes" class="form-control"
-                  placeholder="Ring doorbell, leave at door, etc.">
+                  placeholder="Ring doorbell, leave at door, landmark, etc.">
               </div>
 
               <h3 style="margin:28px 0 16px">Payment Method</h3>
@@ -1035,6 +1052,27 @@
     style="max-width:460px;width:92%;border:none;border-radius:var(--radius-lg);background:var(--clr-surface);color:var(--clr-text);padding:0;box-shadow:0 24px 60px rgba(0,0,0,.6)">
     <div id="payment-confirm-body" style="padding:28px;text-align:center">
       <!-- Dynamically populated by JS -->
+    </div>
+  </dialog>
+
+  <!-- Delivery Location Interactive Map Dialog (Admin & Rider) -->
+  <dialog id="order-location-map-dialog" class="order-map-dialog">
+    <div style="padding:18px 24px;border-bottom:1px solid var(--clr-surface-border);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.02)">
+      <div>
+        <h3 id="order-map-modal-title" style="margin:0;display:flex;align-items:center;gap:8px;font-size:1.15rem">
+          <span>📍</span> Live Delivery Location Map
+        </h3>
+        <p id="order-map-modal-subtitle" style="margin:4px 0 0;font-size:.8rem;color:var(--clr-text-muted)">Pinpoint location of customer order</p>
+      </div>
+      <button type="button" onclick="closeOrderLocationMapModal()" class="dialog-close" style="background:none;border:none;font-size:1.4rem;color:var(--clr-text-muted);cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:20px 24px">
+      <div id="order-map-embed-container" style="width:100%;height:320px;border-radius:var(--radius-md);overflow:hidden;background:#0f172a;border:1px solid var(--clr-surface-border);position:relative">
+        <!-- Interactive Map Iframe inserted by JS -->
+      </div>
+      <div id="order-map-details-container" style="margin-top:16px;padding:16px;background:var(--clr-bg-alt);border-radius:var(--radius-md);border:1px solid var(--clr-surface-border)">
+        <!-- Address info, coordinates, rider WhatsApp link, Google Maps link -->
+      </div>
     </div>
   </dialog>
 
