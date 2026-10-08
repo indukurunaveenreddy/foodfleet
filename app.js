@@ -438,18 +438,18 @@ function formatPrice(amount) {
 // IMAGE MAP — maps category to the food images we have
 // ============================================================
 const IMAGE_MAP = {
-  burger:   'images/hero-burger.jpg',
-  pizza:    'images/pizza.jpg',
-  sushi:    'images/sushi.jpg',
-  pasta:    'images/pasta.jpg',
-  tacos:    'images/tacos.jpg',
-  salad:    'images/salad.jpg',
-  dessert:  'images/pasta.jpg',
-  icecream: 'images/icecream.jpg',
-  drinks:   'images/drinks.jpg',
-  biryani:  'images/biryani.jpg',
-  chinese:  'images/chinese.jpg',
-  sandwich: 'images/hero-burger.jpg',
+  burger:   'hero-burger.jpg',
+  pizza:    'pizza.jpg',
+  sushi:    'sushi.jpg',
+  pasta:    'pasta.jpg',
+  tacos:    'tacos.jpg',
+  salad:    'salad.jpg',
+  dessert:  'pasta.jpg',
+  icecream: 'icecream.jpg',
+  drinks:   'drinks.jpg',
+  biryani:  'biryani.jpg',
+  chinese:  'chinese.jpg',
+  sandwich: 'hero-burger.jpg',
 };
 
 // ============================================================
